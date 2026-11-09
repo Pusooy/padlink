@@ -34,7 +34,9 @@ internal static class WebSocketHandler
                 {
                     if (type == "ping")
                     {
-                        var ts = root.TryGetProperty("ts", out var tsEl) ? tsEl.GetInt64() : 0;
+                        long ts = 0;
+                        if (root.TryGetProperty("ts", out var tsEl) && tsEl.ValueKind == System.Text.Json.JsonValueKind.Number)
+                            ts = tsEl.TryGetInt64(out var l) ? l : (long)tsEl.GetDouble();
                         await Reply(ws, new { t = "pong", ts });
                         continue;
                     }

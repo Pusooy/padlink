@@ -115,6 +115,7 @@ button svg.lucide { pointer-events:none; }
   display:inline-flex; align-items:center; }
 .wrow button svg.lucide { width:16px; height:16px; }
 .wrow button.close { color:var(--bad); }
+.wrow .badge { background:var(--ok); color:#fff; font-size:10.5px; padding:3px 9px; border-radius:999px; flex-shrink:0; }
 .wrow button:active { opacity:.6; }
 #appsGrid { display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; margin-bottom:4px; }
 .appTile { display:flex; flex-direction:column; align-items:center; gap:6px; padding:12px 4px;
@@ -176,7 +177,7 @@ button svg.lucide { pointer-events:none; }
     <button class="mbtn" id="mDrag"><i data-lucide="hand"></i>拖拽</button>
   </div>
   <div id="stage">
-    <div id="pad"><div id="hint">单指拖动 = 移动指针<br>轻点 = 左键 · 双指轻点 = 右键<br>双指滑动 = 滚动</div></div>
+    <div id="pad"><div id="hint">单指拖动 = 移动指针<br>轻点 = 左键 · 双指轻点 = 右键<br>双指滑动 = 滚动 · 输入框支持中文</div></div>
     <div id="scrollzone">滚动区 · 单指上下滑动</div>
   </div>
 </div>
@@ -249,7 +250,7 @@ button svg.lucide { pointer-events:none; }
   var $ = function (id) { return document.getElementById(id); };
   var app=$("app"), connectPage=$("connect"), dot=$("statusDot"), statusText=$("statusText"),
       pad=$("pad"), hint=$("hint"), scrollzone=$("scrollzone"),
-      kbpanel=$("kbpanel"), dock=$("dock"), kbin=$("kbin"), ipin=$("ipin"), sentText="";
+      kbpanel=$("kbpanel"), dock=$("dock"), kbin=$("kbin"), ipin=$("ipin");
   var SENS = parseFloat(localStorage.getItem("pl_sens") || "1.6");
   var SCROLL = parseFloat(localStorage.getItem("pl_sscroll") || "2");
   function buzz(ms) { try { navigator.vibrate && navigator.vibrate(ms); } catch (e) {} }
@@ -281,7 +282,11 @@ button svg.lucide { pointer-events:none; }
   $("fsBtn").addEventListener("click", function () {
     try {
       if (document.fullscreenElement) { document.exitFullscreen(); return; }
-      if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen();
+      if (document.documentElement.requestFullscreen) {
+        document.documentElement.requestFullscreen().then(function () {
+          try { screen.orientation && screen.orientation.lock && screen.orientation.lock("landscape").catch(function(){}); } catch (e) {}
+        }).catch(function(){});
+      }
       else toast("此浏览器不支持全屏：iPhone 请「添加到主屏幕」获得全屏体验");
     } catch (e) { toast("全屏失败"); }
   });
@@ -550,20 +555,31 @@ button svg.lucide { pointer-events:none; }
     kbpanel.classList.toggle("show", show);
     dock.classList.remove("show");
     this.classList.toggle("active", show);
-    if (show) { kbin.focus(); sentText = kbin.value; }
+    if (show) { kbin.focus(); }
+    else flushBuffer();
     buzz(8);
   });
-  kbin.addEventListener("input", function () {
+  // 输入采用"缓冲清空"模型：停顿/收起/回车时整段发出并清空输入框，
+  // 输入框内容永远等于"尚未发送"的部分，从根源上消除镜像跳变
+  var composing = false, flushTimer = null;
+  function flushBuffer() {
+    clearTimeout(flushTimer); flushTimer = null;
     var v = kbin.value;
-    if (v.indexOf(sentText) === 0 && v.length >= sentText.length) {
-      var added = v.slice(sentText.length);
-      if (added) send({ t:"text", value: added });
-    } else {
-      var removed = sentText.length - v.length;
-      if (removed > 0) send({ t:"key", value:"backspace", count: removed });
-      if (v) send({ t:"text", value: v });
-    }
-    sentText = v;
+    if (v) { send({ t:"text", value: v }); kbin.value = ""; }
+  }
+  kbin.addEventListener("compositionstart", function () { composing = true; clearTimeout(flushTimer); });
+  kbin.addEventListener("compositionend", function () {
+    composing = false;
+    clearTimeout(flushTimer);
+    flushTimer = setTimeout(flushBuffer, 120);
+  });
+  kbin.addEventListener("input", function () {
+    if (composing) return;
+    clearTimeout(flushTimer);
+    flushTimer = setTimeout(flushBuffer, 280);
+  });
+  kbin.addEventListener("keydown", function (e) {
+    if (e.key === "Enter" && !composing) { flushBuffer(); send({ t:"key", value:"return" }); }
   });
 
   /* ---------- Dock 面板 ---------- */
@@ -583,19 +599,36 @@ button svg.lucide { pointer-events:none; }
   }
   function renderWindows(list) {
     var el = $("winList"); el.innerHTML = "";
-    if (!list.length) { el.innerHTML = '<div class="wrow"><div class="wt">（没有可切换的窗口）</div></div>'; return; }
+    if (!list.length) { el.innerHTML = '<div class="wrow"><div class="wt">（没有打开的窗口）</div></div>'; return; }
     list.forEach(function (w) {
       var row = document.createElement("div"); row.className = "wrow";
       var img = document.createElement("img"); img.className = "wicon";
       img.src = "/icon?pid=" + w.pid;
       img.onerror = function () { img.style.display = "none"; };
       var t = document.createElement("div"); t.className = "wt"; t.textContent = w.title;
-      var f = document.createElement("button"); f.title = "切换";
-      f.innerHTML = '<i data-lucide="eye"></i>';
-      f.addEventListener("click", function () { send({ t:"focus_window", id:w.id }); buzz(10); });
-      var m = document.createElement("button"); m.title = "最小化";
-      m.innerHTML = '<i data-lucide="minus"></i>';
-      m.addEventListener("click", function () { send({ t:"min_window", id:w.id }); setTimeout(refreshDock, 500); });
+      row.appendChild(img); row.appendChild(t);
+      // 前台窗口：显示"当前"徽章，无切换按钮
+      if (w.foreground) {
+        var badge = document.createElement("span"); badge.className = "badge"; badge.textContent = "当前";
+        row.appendChild(badge);
+      } else {
+        var f = document.createElement("button"); f.title = "切换到该窗口";
+        f.innerHTML = '<i data-lucide="eye"></i>';
+        f.addEventListener("click", function () { send({ t:"focus_window", id:w.id }); buzz(10); });
+        row.appendChild(f);
+      }
+      // 最小化状态：显示"还原"，否则显示"最小化"
+      if (w.minimized) {
+        var m = document.createElement("button"); m.title = "还原";
+        m.innerHTML = '<i data-lucide="maximize-2"></i>';
+        m.addEventListener("click", function () { send({ t:"focus_window", id:w.id }); buzz(10); });
+        row.appendChild(m);
+      } else {
+        var m = document.createElement("button"); m.title = "最小化";
+        m.innerHTML = '<i data-lucide="minus"></i>';
+        m.addEventListener("click", function () { send({ t:"min_window", id:w.id }); setTimeout(refreshDock, 500); });
+        row.appendChild(m);
+      }
       var c = document.createElement("button"); c.title = "关闭"; c.className = "close";
       c.innerHTML = '<i data-lucide="x"></i>';
       c.addEventListener("click", function () {
@@ -603,7 +636,7 @@ button svg.lucide { pointer-events:none; }
         c.style.opacity = ".35";
         setTimeout(refreshDock, 1200);
       });
-      row.appendChild(img); row.appendChild(t); row.appendChild(f); row.appendChild(m); row.appendChild(c);
+      row.appendChild(c);
       el.appendChild(row);
     });
     icons();

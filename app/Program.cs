@@ -1,14 +1,9 @@
-using Microsoft.AspNetCore;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using System.Diagnostics;
-using System.Net;
-using System.Net.Sockets;
-using System.Text;
-using System.Text.Json;
 
 namespace PadLink;
 
@@ -18,8 +13,15 @@ internal static class Program
     static void Main(string[] args)
     {
         ApplicationConfiguration.Initialize();
+        if (args.Contains("--settings", StringComparer.OrdinalIgnoreCase))
+        {
+            // 仅供查看设置窗口（不启动服务，避免端口冲突）
+            Application.Run(new MainForm());
+            return;
+        }
         var context = new TrayContext();
         context.StartServer();
+        context.ShowStartupBalloon();
         Application.Run(context);
         context.StopServer();
     }
@@ -31,13 +33,13 @@ internal sealed class TrayContext : ApplicationContext
     private NotifyIcon? _tray;
     private IHost? _host;
     private DiscoverListener? _discover;
-    private SettingsForm? _settingsForm;
+    private MainForm? _mainForm;
 
     public TrayContext()
     {
         var menu = new ContextMenuStrip();
+        menu.Items.Add("设置…", null, (s, e) => ShowMainForm());
         menu.Items.Add("打开控制页", null, (s, e) => OpenControlPage());
-        menu.Items.Add("连接信息", null, (s, e) => ShowSettings());
         menu.Items.Add(new ToolStripSeparator());
         var autoItem = new ToolStripMenuItem("开机自启") { Checked = Autostart.IsEnabled() };
         autoItem.Click += (s, e) =>
@@ -56,7 +58,7 @@ internal sealed class TrayContext : ApplicationContext
             ContextMenuStrip = menu,
             Visible = true,
         };
-        _tray.DoubleClick += (s, e) => OpenControlPage();
+        _tray.DoubleClick += (s, e) => ShowMainForm();
     }
 
     private static Icon LoadAppIcon()
@@ -67,7 +69,7 @@ internal sealed class TrayContext : ApplicationContext
 
     public static string LocalIP => NetworkService.GetLocalIP();
     public static int Port => 8765;
-    public string BaseUrl => $"http://{LocalIP}:{Port}";
+    public static string BaseUrl => $"http://{LocalIP}:{Port}";
 
     public void StartServer()
     {
@@ -102,6 +104,12 @@ internal sealed class TrayContext : ApplicationContext
         }
     }
 
+    public void ShowStartupBalloon()
+    {
+        if (_tray != null)
+            _tray.ShowBalloonTip(2500, "PadLink 已启动", $"手机访问 {BaseUrl} 即可连接", ToolTipIcon.Info);
+    }
+
     public void StopServer()
     {
         _discover?.Dispose();
@@ -118,11 +126,17 @@ internal sealed class TrayContext : ApplicationContext
         catch { MessageBox.Show($"请手动打开：{BaseUrl}", "PadLink"); }
     }
 
-    private void ShowSettings()
+    private void ShowMainForm()
     {
-        _settingsForm?.Dispose();
-        _settingsForm = new SettingsForm(BaseUrl, WebSocketHandler.ConnectedCount);
-        _settingsForm.Show();
+        if (_mainForm == null || _mainForm.IsDisposed)
+        {
+            _mainForm = new MainForm();
+            _mainForm.Show();
+        }
+        else
+        {
+            _mainForm.Activate();
+        }
     }
 }
 

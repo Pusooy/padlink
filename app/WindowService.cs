@@ -47,7 +47,7 @@ internal static class IconService
     }
 }
 
-/// <summary>窗口枚举 / 激活 / 关闭 / 最小化。</summary>
+/// <summary>窗口枚举（仅任务栏级窗口）/ 激活 / 关闭 / 最小化。</summary>
 internal static class WindowService
 {
     [DllImport("user32.dll")] private static extern bool EnumWindows(EnumWindowsProc cb, IntPtr lParam);
@@ -55,35 +55,62 @@ internal static class WindowService
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetWindowText(IntPtr hWnd, StringBuilder text, int count);
     [DllImport("user32.dll")] private static extern bool IsIconic(IntPtr hWnd);
     [DllImport("user32.dll")] private static extern bool IsWindow(IntPtr hWnd);
+    [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")] private static extern IntPtr GetAncestor(IntPtr hWnd, uint flags);
+    [DllImport("user32.dll")] private static extern int GetWindowLongW(IntPtr hWnd, int index);
     [DllImport("user32.dll")] private static extern bool ShowWindowAsync(IntPtr hWnd, int cmdShow);
     [DllImport("user32.dll")] private static extern bool SetForegroundWindow(IntPtr hWnd);
     [DllImport("user32.dll")] private static extern bool PostMessage(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
     [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint pid);
+    [DllImport("dwmapi.dll")] private static extern int DwmGetWindowAttribute(IntPtr hWnd, int attr, out int value, int size);
 
     private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
     private const int SW_RESTORE = 9, SW_MINIMIZE = 6;
-    private const uint WM_CLOSE = 0x0010;
+    private const uint WM_CLOSE = 0x0010, GA_ROOT = 2;
+    private const int GWL_STYLE = -16, GWL_EXSTYLE = -20;
+    private const int WS_EX_TOOLWINDOW = 0x80, WS_EX_APPWINDOW = 0x100, WS_CHILD = 0x40000000;
+    private const int DWMWA_CLOAKED = 14;
 
     private static readonly HashSet<string> TitleBlacklist = new(StringComparer.OrdinalIgnoreCase)
     {
         "Program Manager", "Windows Input Experience", "Microsoft Text Input Application",
         "WeType Native Candidate", "WeType Candidate Shadow and Emoji",
-        "New notification", "Windows Shell Experience Host",
+        "Windows Shell Experience Host", "开始", "任务栏", "搜索", "Nvidia Overlay", "Notification Center",
     };
+
+    /// <summary>是否为任务栏/Alt-Tab 可见的顶层窗口。</summary>
+    private static bool IsTaskbarWindow(IntPtr hWnd, string title)
+    {
+        if (!IsWindowVisible(hWnd)) return false;
+        if (title.Length == 0 || TitleBlacklist.Contains(title)) return false;
+        if (title.StartsWith("PadLink", StringComparison.OrdinalIgnoreCase)) return false;
+        if ((GetWindowLongW(hWnd, GWL_STYLE) & WS_CHILD) != 0) return false;
+        var ex = GetWindowLongW(hWnd, GWL_EXSTYLE);
+        if ((ex & WS_EX_TOOLWINDOW) != 0 && (ex & WS_EX_APPWINDOW) == 0) return false;
+        if (GetAncestor(hWnd, GA_ROOT) != hWnd) return false;
+        if (DwmGetWindowAttribute(hWnd, DWMWA_CLOAKED, out var cloaked, 4) == 0 && cloaked != 0) return false;
+        return true;
+    }
 
     public static List<object> ListWindows()
     {
         var result = new List<object>();
+        var fg = GetForegroundWindow();
         EnumWindows((hWnd, _) =>
         {
-            if (!IsWindowVisible(hWnd)) return true;
             var sb = new StringBuilder(256);
             GetWindowText(hWnd, sb, 256);
             var title = sb.ToString().Trim();
-            if (title.Length == 0 || TitleBlacklist.Contains(title)) return true;
-            if (title.StartsWith("PadLink", StringComparison.OrdinalIgnoreCase)) return true;
+            if (!IsTaskbarWindow(hWnd, title)) return true;
             GetWindowThreadProcessId(hWnd, out var pid);
-            result.Add(new { id = hWnd.ToInt64(), title, pid });
+            result.Add(new
+            {
+                id = hWnd.ToInt64(),
+                title,
+                pid,
+                minimized = IsIconic(hWnd),
+                foreground = hWnd == fg,
+            });
             return true;
         }, IntPtr.Zero);
         return result;

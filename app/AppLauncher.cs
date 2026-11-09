@@ -148,6 +148,39 @@ internal static class AppLauncher
         catch { return null; }
     }
 
+    /// <summary>给设置窗口用：返回 name/cmd 原始列表。</summary>
+    public static List<object> ListAppsRaw()
+    {
+        EnsureConfig();
+        var list = new List<object>();
+        try
+        {
+            using var doc = JsonDocument.Parse(File.ReadAllText(ConfigPath));
+            foreach (var a in doc.RootElement.GetProperty("apps").EnumerateArray())
+                list.Add(new { name = a.GetProperty("name").GetString(), cmd = a.GetProperty("cmd").GetString() });
+        }
+        catch { }
+        return list;
+    }
+
+    /// <summary>保存应用列表到 apps.json。</summary>
+    public static void SaveApps(List<(string Name, string Cmd)> apps)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("{");
+        sb.AppendLine("  \"apps\": [");
+        for (int i = 0; i < apps.Count; i++)
+        {
+            var name = JsonSerializer.Serialize(apps[i].Name);
+            var cmd = JsonSerializer.Serialize(apps[i].Cmd);
+            sb.Append("    { \"name\": ").Append(name).Append(", \"cmd\": ").Append(cmd).Append('}');
+            sb.AppendLine(i < apps.Count - 1 ? "," : "");
+        }
+        sb.AppendLine("  ]");
+        sb.AppendLine("}");
+        File.WriteAllText(ConfigPath, sb.ToString());
+    }
+
     private static void EnsureConfig()
     {
         if (File.Exists(ConfigPath)) return;
