@@ -1,26 +1,30 @@
 # -*- coding: utf-8 -*-
 """
-PadLink 服务端 —— 跑在 Windows 上，接收 iPhone 触控板 App 的指令控制鼠标键盘。
+PadLink 网页版服务端 —— 一个端口同时提供触控板网页 + WebSocket 控制通道。
 
 用法：双击 启动服务端.bat，或命令行运行 python server.py
+然后手机浏览器打开控制台显示的网址（或扫终端里的二维码）。
 首次运行 Windows 防火墙弹窗时，勾选"专用网络"并允许访问。
 """
 import asyncio
 import json
 import socket
 import sys
+from pathlib import Path
 
 try:
     sys.stdout.reconfigure(encoding="utf-8")
 except Exception:
     pass
 
-from websockets.asyncio.server import serve
+import qrcode
+from aiohttp import WSMsgType, web
 from pynput.mouse import Button, Controller as MouseController
 from pynput.keyboard import Controller as KeyboardController
 
 HOST = "0.0.0.0"
 PORT = 8765
+WEB_DIR = Path(__file__).parent / "web"
 
 mouse = MouseController()
 keyboard = KeyboardController()
@@ -64,12 +68,13 @@ def handle_event(data: dict) -> None:
             keyboard.type(value)
 
     elif t == "key":
-        # 特殊按键：backspace / enter / tab / esc / up / down / left / right / ctrl+c 等
+        # 特殊按键：backspace / return / tab / esc / up / down / left / right / ctrl+c 等
         name = data.get("value", "")
         if "+" in name:
-            mods, _, main = name.rpartition("+")
-            from pynput.keyboard import Key, KeyCode
+            from pynput.keyboard import Key
+
             mod_map = {"ctrl": Key.ctrl, "alt": Key.alt, "shift": Key.shift, "win": Key.cmd}
+            mods, _, main = name.rpartition("+")
             with keyboard.pressed(*(mod_map[m] for m in mods.split("+") if m in mod_map)):
                 if len(main) == 1:
                     keyboard.tap(main)
@@ -77,6 +82,7 @@ def handle_event(data: dict) -> None:
                     keyboard.tap(getattr(Key, main))
         else:
             from pynput.keyboard import Key
+
             count = int(data.get("count", 1))
             if hasattr(Key, name):
                 for _ in range(count):
@@ -85,35 +91,67 @@ def handle_event(data: dict) -> None:
                 keyboard.tap(name)
 
 
-async def handler(ws) -> None:
-    peer = ws.remote_address[0] if ws.remote_address else "?"
+async def ws_handler(request: web.Request) -> web.WebSocketResponse:
+    ws = web.WebSocketResponse()
+    await ws.prepare(request)
+    peer = request.remote
     print(f"[连接] 手机已连入：{peer}")
     try:
-        async for raw in ws:
-            try:
-                data = json.loads(raw)
-            except (ValueError, TypeError):
-                continue
-            if data.get("t") == "ping":
-                await ws.send(json.dumps({"t": "pong", "ts": data.get("ts", 0)}))
-                continue
-            # pynput 的 win32 后端是同步阻塞调用，丢到线程池避免卡住事件循环
-            await asyncio.to_thread(handle_event, data)
-    except Exception as e:
-        print(f"[断开] {peer}：{type(e).__name__}")
-    print(f"[断开] 手机已断开：{peer}")
+        async for msg in ws:
+            if msg.type == WSMsgType.TEXT:
+                try:
+                    data = json.loads(msg.data)
+                except (ValueError, TypeError):
+                    continue
+                if data.get("t") == "ping":
+                    await ws.send_json({"t": "pong", "ts": data.get("ts", 0)})
+                    continue
+                # pynput 的 win32 后端是同步阻塞调用，丢到线程池避免卡住事件循环
+                await asyncio.to_thread(handle_event, data)
+            elif msg.type == WSMsgType.ERROR:
+                break
+    finally:
+        print(f"[断开] 手机已断开：{peer}")
+    return ws
 
 
-async def main():
-    ip = get_local_ip()
-    print("=" * 46)
-    print("  PadLink 服务端已启动")
-    print(f"  请在 iPhone App 里填入此地址：{ip}")
-    print(f"  端口：{PORT}")
+async def index_handler(request: web.Request) -> web.FileResponse:
+    return web.FileResponse(WEB_DIR / "index.html")
+
+
+def make_app() -> web.Application:
+    app = web.Application()
+    app.router.add_get("/", index_handler)
+    app.router.add_get("/ws", ws_handler)
+    app.router.add_static("/static/", WEB_DIR)
+    return app
+
+
+def print_banner(ip: str) -> None:
+    url = f"http://{ip}:{PORT}"
+    print("=" * 52)
+    print("  PadLink 网页版服务端已启动")
+    print()
+    print(f"  手机浏览器打开：  {url}")
+    print("  （手机需与电脑连同一个 WiFi）")
+    print("  打开后建议：分享 → 添加到主屏幕")
+    print()
+    print("  扫码直达：")
+    qr = qrcode.QRCode(border=1)
+    qr.add_data(url)
+    qr.print_ascii(invert=True)
     print("  按 Ctrl+C 退出")
-    print("=" * 46)
-    async with serve(handler, HOST, PORT, ping_interval=20):
-        await asyncio.Future()
+    print("=" * 52)
+
+
+async def main() -> None:
+    ip = get_local_ip()
+    print_banner(ip)
+    runner = web.AppRunner(make_app())
+    await runner.setup()
+    site = web.TCPSite(runner, HOST, PORT)
+    await site.start()
+    await asyncio.Future()  # 运行到被 Ctrl+C 中断
 
 
 if __name__ == "__main__":

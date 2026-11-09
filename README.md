@@ -1,85 +1,64 @@
-# PadLink —— iPhone 无线触控板 + 键盘（含真实震动反馈）
+# PadLink —— 把手机变成 Windows 的无线触控板 + 键盘 + Dock
 
-用 SideStore 长期免费安装的自研 iOS App，通过 WiFi 局域网控制 Windows 鼠标键盘。
-震动走系统级 `UIImpactFeedbackGenerator`，这是 PWA 做不到的。
-
-```
-iPhone PadLink App ──WebSocket(8765端口)──> Windows server.py ──> 控制鼠标/键盘
-```
-
-## 目录结构
+纯网页方案：iPhone/Android 浏览器打开即用，无需安装任何 App、无需签名、无需 Mac。
+Windows 端是 **.NET 8 + WinForms 托盘程序**（`app/`），现代 Win11 原生 UI。
+（`windows-server/` 为早期 Python 版本，功能相同，留作备用。）
 
 ```
-padlink/
-├── windows-server/          ← 电脑端（已在本机测试通过）
-│   ├── server.py            服务端主程序
-│   └── 启动服务端.bat        双击启动
-├── ios/                     ← iPhone 端（SwiftUI 源码）
-│   ├── project.yml          XcodeGen 工程定义
-│   └── PadLink/             Swift 源码
-└── .github/workflows/build-ipa.yml   ← GitHub 云端编译 IPA（无需 Mac）
+手机浏览器/主屏幕App ──WebSocket──> PadLink 托盘程序（Kestrel, 端口 8765）
+                                      ├─ SendInput 控制鼠标/键盘（含中文 Unicode 输入、媒体键）
+                                      ├─ 窗口管理（枚举/切换/最小化/关闭）
+                                      └─ 应用启动器（apps.json 可自定义）
 ```
 
-## 你需要动手的步骤（按顺序）
+## 功能一览
 
-### A. 准备电脑（5 分钟）
-
-1. 双击安装 `C:\Users\trump\Downloads\sidestore-setup\iloader-windows-x64.msi`
-   （iTunes 已由助手装好；如识别不了手机再从 Microsoft Store 装「Apple Devices」）
-2. 服务端不用动，`padlink\windows-server\` 已经就绪
-
-### B. 云端编译 App（10 分钟，一次性）
-
-3. 打开 github.com 登录 → 右上角 + → New repository
-   - 名称随意（如 `padlink`），**选 Public**（免费白嫖 macOS 编译机），Create
-4. 在新仓库页面点 **uploading an existing file**（或 Add file → Upload files）
-5. 把 `padlink` 文件夹里的**全部内容**（`.github`、`ios`、`windows-server`、`README.md`）拖进网页 → Commit changes
-6. 仓库顶部 **Actions** 标签 → 等 "Build IPA" 变绿（约 3~5 分钟）
-   - 如果红了：点进去看报错截图发给我
-7. 进该次运行 → 页面底部 **Artifacts** → 下载 `PadLink-ipa`
-8. 解压 zip 得到 `PadLink.ipa`，通过微信/QQ/数据线/网盘传到 iPhone（存到「文件」App 里）
-
-### C. 安装 SideStore（15 分钟，一次性）
-
-9. iPhone App Store 安装 **LocalDevVPN**，打开点 Connect，允许 VPN 配置
-10. 数据线连接 iPhone ↔ Windows，手机点「信任」并输锁屏密码
-11. 打开 iloader → 登录 Apple ID → 选中你的 iPhone → **Install SideStore (Stable)**
-12. 手机：设置 → 通用 → VPN与设备管理 → 信任你的 Apple ID 证书
-13. 手机：设置 → 隐私与安全性 → 开发者模式 → 开启（自动重启）
-14. 打开 LocalDevVPN 点 Connect → 打开 SideStore → 登录同一 Apple ID
-15. My Apps 页 → 点 SideStore 右侧「7 DAYS」刷新一次 → 弹窗问证书时点 Yes/Refresh Now
-
-### D. 装 PadLink 并连接（2 分钟）
-
-16. SideStore → 右上角 **+** → 从「文件」里选中 `PadLink.ipa` → 安装
-17. 电脑双击 `padlink\windows-server\启动服务端.bat`，**防火墙弹窗勾选专用网络并允许**
-18. iPhone 打开 PadLink → 填入服务端窗口显示的 IP → 连接 → 开用！
-
-## 日常使用
-
-- 电脑：双击 `启动服务端.bat`
-- 手机：打开 PadLink 连接即可
-- 续签：**无需电脑**，LocalDevVPN 保持开启、手机连着 WiFi 就会自动续签
-- 免费账号限制：最多 3 个自装 App（SideStore 占 1 个），PadLink 占 1 个
-
-## 触控板操作说明
-
-| 手势 | 效果（带震动反馈） |
+| 模块 | 内容 |
 |---|---|
-| 单指拖动 | 移动鼠标指针 |
-| 轻点 | 左键单击 |
-| 顶部鼠标图标 | 右键单击 |
-| 下方滚动条上下拖 | 滚轮（滚动时有细腻震动刻度） |
-| 顶部键盘图标 | 打开文字输入，实时打到电脑（支持中文） |
-| 回车/退格按钮 | 对应按键 |
+| 触控板 | 单指拖动移指针 · 轻点=左键 · 双指轻点=右键 · 双指滑动/滚动区=滚轮（灵敏度 1.6 可调） |
+| 86 键键盘 | 全键盘布局（字母/数字/符号/F 区缺省）· Shift/Caps/Ctrl/Win/Alt 组合键 · 方向键 · 顶部输入框走系统输入法（支持中文） |
+| Dock | 实时窗口列表（切换/最小化/关闭）· 一键打开应用（apps.json 自定义）· 多媒体键（播放/音量/静音）· 快捷键芯片（复制/粘贴/Alt+F4/显示桌面/锁屏…） |
+| 连接 | 记住上次 IP 自动重连 · 局域网自动搜索（WebRTC 推断网段 + 并发探测）· UDP 广播发现（端口 8766，供原生 App 用） |
+| UI | 现代设计 · 亮/暗主题（跟随系统+手动切换）· 响应式布局 · iPhone 加到主屏幕后全屏 PWA 体验 |
+| PC 端 | 托盘常驻 · 开机自启（托盘菜单开关）· 连接信息窗口 · 单文件发布 180MB 免安装 |
+
+## 快速开始
+
+### 电脑端
+1. 运行 `PadLink.exe`（托盘出现图标；已设开机自启）
+2. 首次联网弹出防火墙提示 → 勾选"专用网络"允许
+3. 托盘双击图标打开控制页；右键菜单：打开控制页 / 连接信息 / 开机自启 / 退出
+
+### 手机端
+1. 连同一 WiFi，浏览器打开电脑显示的地址（如 `http://192.168.1.100:8765`）
+2. iPhone Safari：分享 → **添加到主屏幕** → 从主屏幕打开即为全屏 App
+
+## 自定义应用磁贴
+
+编辑 exe 同目录的 `apps.json`：
+
+```json
+{ "apps": [ { "name": "微信", "cmd": "C:\\Program Files\\Tencent\\WeChat\\WeChat.exe" } ] }
+```
+
+`cmd` 支持任意 exe 路径、PATH 中的程序名、URI（如 `ms-screenclip:`）。
+
+## 从源码构建
+
+```
+cd windows-app
+dotnet publish -c Release        # 产物: bin/Release/net8.0-windows/win-x64/publish/
+```
+
+依赖：.NET 8 SDK（Windows）。发布为自包含单文件，目标机无需装运行时。
 
 ## 故障排查
 
-- **连不上**：确认同一 WiFi（有些路由器开了 AP 隔离会不通）；IP 变了就重新看服务端窗口
-- **防火墙**：Windows 设置 → 防火墙 → 允许应用 → 勾选 Python（专用）
-- **SideStore 闪退/装不上**：先确认 LocalDevVPN 已 Connect、开发者模式已开
-- **证书过期 App 打不开**：SideStore → My Apps → 点该 App 的倒计时手动刷新
+- 手机连不上：确认同 WiFi（路由器 AP 隔离会拦截）· 托盘程序在运行 · 防火墙放行 8765
+- IP 变了：连接页点「自动搜索局域网电脑」，或托盘"连接信息"里看当前 IP
+- 中文输入没反应：先用鼠标点一下目标窗口再输入
+- 日志：exe 同目录 `padlink.log`
 
 ## 安全提示
 
-协议是明文 WebSocket，仅在**可信的家庭局域网**内使用，勿在公共 WiFi 使用。
+明文 WebSocket + 完全控制权限，**仅在可信的家庭局域网使用**，勿在公共 WiFi 使用。

@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<!-- PWA：iPhone 添加到主屏幕后全屏独立运行 -->
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="PadLink">
+<meta name="theme-color" content="#0b0b0f">
+<link rel="manifest" href="/static/manifest.json">
+<link rel="apple-touch-icon" href="/static/icon.png">
+<title>PadLink 触控板</title>
+<style>
+  :root { color-scheme: dark; }
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    height: 100%; overflow: hidden; overscroll-behavior: none;
+    background: #0b0b0f; color: #e8e8ec;
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+    touch-action: none;
+  }
+  #app { display: flex; flex-direction: column; height: 100%;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+
+  /* 顶栏 */
+  #topbar { display: flex; align-items: center; gap: 10px; padding: 8px 14px; }
+  #statusDot { width: 10px; height: 10px; border-radius: 50%; background: #e05555; transition: background .2s; }
+  #statusDot.on { background: #34c77b; box-shadow: 0 0 8px #34c77b88; }
+  #statusText { font-size: 13px; color: #9a9aa5; flex: 1; white-space: nowrap; overflow: hidden; }
+  .tbtn { border: 1px solid #2c2c36; background: #17171f; color: #cfcfd8; border-radius: 10px;
+    padding: 9px 14px; font-size: 14px; }
+  .tbtn:active { background: #26262f; }
+  .tbtn.active { border-color: #4c8dff; color: #7ab0ff; }
+
+  /* 主触控板 */
+  #pad { flex: 1; margin: 4px 10px; border-radius: 18px;
+    background: #131319; border: 1px solid #26262f; position: relative; overflow: hidden; }
+  #hint { position: absolute; inset: 0; display: flex; flex-direction: column; gap: 10px;
+    align-items: center; justify-content: center; color: #3d3d4a; font-size: 14px; text-align: center;
+    pointer-events: none; line-height: 1.6; }
+  .ripple { position: absolute; width: 14px; height: 14px; margin: -7px 0 0 -7px; border-radius: 50%;
+    background: #4c8dff; opacity: .45; pointer-events: none; animation: rip .3s ease-out forwards; }
+  @keyframes rip { to { transform: scale(3.2); opacity: 0; } }
+
+  /* 滚动条 */
+  #scrollzone { height: 92px; margin: 4px 10px 8px; border-radius: 16px;
+    background: #0f0f15; border: 1px solid #22222b;
+    display: flex; align-items: center; justify-content: center; color: #3d3d4a; font-size: 13px; }
+  #scrollzone.active { border-color: #4c8dff; }
+
+  /* 键盘面板 */
+  #kbpanel { display: none; padding: 8px 10px; background: #101016; }
+  #kbpanel.show { display: block; }
+  #kbin { width: 100%; font-size: 16px; padding: 10px 12px; border-radius: 10px;
+    border: 1px solid #2c2c36; background: #17171f; color: #e8e8ec; outline: none; }
+  #kbrow { display: flex; gap: 16px; padding-top: 6px; font-size: 14px; }
+  #kbrow button { background: none; border: none; color: #7ab0ff; font-size: 14px; padding: 6px 2px; }
+
+  /* 连接页 */
+  #connect { position: fixed; inset: 0; display: flex; flex-direction: column; gap: 18px;
+    align-items: center; justify-content: center; padding: 0 36px; background: #0b0b0f; z-index: 10; }
+  #connect h1 { font-size: 30px; letter-spacing: .5px; }
+  #connect p { color: #9a9aa5; font-size: 14px; text-align: center; line-height: 1.6; }
+  #ipin { width: 100%; font-size: 17px; text-align: center; padding: 12px; border-radius: 12px;
+    border: 1px solid #2c2c36; background: #17171f; color: #e8e8ec; outline: none; }
+  #connectBtn { width: 100%; padding: 13px; border-radius: 12px; border: none;
+    background: #4c8dff; color: #fff; font-size: 17px; font-weight: 600; }
+  #connectBtn:active { background: #3a78ea; }
+  #autoTip { color: #6a6a75; font-size: 12px; text-align: center; }
+</style>
+</head>
+<body>
+<div id="app" style="display:none">
+  <div id="topbar">
+    <div id="statusDot"></div>
+    <div id="statusText">未连接</div>
+    <button class="tbtn" id="kbBtn">⌨ 键盘</button>
+    <button class="tbtn" id="rcBtn">右键</button>
+  </div>
+  <div id="pad"><div id="hint">单指拖动 = 移动指针<br>轻点 = 左键 · 双指轻点 = 右键<br>双指上下滑动 = 滚动</div></div>
+  <div id="scrollzone">滚动区：单指上下滑动</div>
+  <div id="kbpanel">
+    <input id="kbin" type="text" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="输入文字，实时打到电脑">
+    <div id="kbrow">
+      <button id="kEnter">回车</button>
+      <button id="kBack">退格</button>
+      <span style="flex:1"></span>
+      <button id="kClose">收起</button>
+    </div>
+  </div>
+</div>
+
+<div id="connect">
+  <h1>PadLink</h1>
+  <p>把 iPhone 变成 Windows 的触控板<br>先在电脑上启动 PadLink 服务端</p>
+  <input id="ipin" type="text" placeholder="电脑 IP，如 192.168.1.100" autocapitalize="off" autocomplete="off" spellcheck="false">
+  <button id="connectBtn">连接</button>
+  <p id="autoTip">连接一次后地址会记住，下次自动重连</p>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var PORT = 8765;
+  var SENS = 1.6;          // 手指→鼠标灵敏度
+  var TAP_MS = 260;        // 轻点判定时长
+  var TAP_DIST = 10;       // 轻点判定位移(px)
+
+  var app = document.getElementById("app");
+  var connectPage = document.getElementById("connect");
+  var dot = document.getElementById("statusDot");
+  var statusText = document.getElementById("statusText");
+  var pad = document.getElementById("pad");
+  var hint = document.getElementById("hint");
+  var scrollzone = document.getElementById("scrollzone");
+  var kbpanel = document.getElementById("kbpanel");
+  var kbin = document.getElementById("kbin");
+  var ipin = document.getElementById("ipin");
+  var sentText = "";
+
+  var ws = null;
+  var pingTimer = null;
+  var reconnectTimer = null;
+  var host = localStorage.getItem("padlink_host") || "";
+
+  function connected() { return ws && ws.readyState === 1; }
+
+  function setStatus(on, text) {
+    dot.className = on ? "on" : "";
+    dot.id = "statusDot";
+    statusText.textContent = text;
+  }
+
+  function send(obj) {
+    if (connected()) ws.send(JSON.stringify(obj));
+  }
+  function rawSend(obj, onDone) {
+    if (connected()) { ws.send(JSON.stringify(obj)); if (onDone) onDone(); }
+  }
+
+  function startPing() {
+    clearInterval(pingTimer);
+    pingTimer = setInterval(function () {
+      rawSend({ t: "ping", ts: Date.now() });
+    }, 2000);
+  }
+
+  function connect(hostIP, isAuto) {
+    hostIP = (hostIP || "").trim();
+    if (!hostIP) return;
+    try { ws && ws.close(); } catch (e) {}
+    setStatus(false, "连接中… " + hostIP);
+    ws = new WebSocket("ws://" + hostIP + ":" + PORT + "/ws");
+    var opened = false;
+    ws.onopen = function () {
+      opened = true;
+      localStorage.setItem("padlink_host", hostIP);
+      connectPage.style.display = "none";
+      app.style.display = "flex";
+      setStatus(true, "已连接 " + hostIP);
+      rawSend({ t: "ping", ts: Date.now() });
+      startPing();
+    };
+    ws.onmessage = function (ev) {
+      try {
+        var m = JSON.parse(ev.data);
+        if (m.t === "pong" && m.ts) {
+          setStatus(true, "已连接 " + hostIP + " · " + Math.max(0, Date.now() - m.ts) + "ms");
+        }
+      } catch (e) {}
+    };
+    ws.onclose = function () {
+      clearInterval(pingTimer);
+      if (!opened) {
+        // 首次连接失败：回到连接页
+        connectPage.style.display = "flex";
+        app.style.display = "none";
+        setStatus(false, "未连接");
+        if (!isAuto) alert("连不上，请检查：同一WiFi / 服务端已启动 / 防火墙已放行");
+      } else {
+        setStatus(false, "断开，重连中…");
+        clearTimeout(reconnectTimer);
+        reconnectTimer = setTimeout(function () { connect(hostIP, true); }, 2000);
+      }
+    };
+  }
+
+  document.getElementById("connectBtn").addEventListener("click", function () {
+    connect(ipin.value, false);
+  });
+  ipin.addEventListener("keydown", function (e) { if (e.key === "Enter") connect(ipin.value, false); });
+
+  // ---- 主触控板手势 ----
+  var touches = {};      // id -> {x, y, startX, startY, startT, moved}
+  var scrollTouch = null; // 双指滚动时以第一根手指为准
+  var padMoveLast = null;
+
+  function ripple(x, y) {
+    var r = document.createElement("div");
+    r.className = "ripple";
+    r.style.left = x + "px"; r.style.top = y + "px";
+    pad.appendChild(r);
+    setTimeout(function () { r.remove(); }, 320);
+  }
+
+  pad.addEventListener("touchstart", function (e) {
+    e.preventDefault();
+    for (var i = 0; i < e.changedTouches.length; i++) {
+      var t = e.changedTouches[i];
+      touches[t.identifier] = { x: t.clientX, y: t.clientY, startX: t.clientX, startY: t.clientY, startT: Date.now(), moved: false };
+    }
+    var ids = Object.keys(touches);
+    if (ids.length === 1) {
+      padMoveLast = { x: e.changedTouches[0].clientX, y: e.changedTouches[0].clientY };
+    } else if (ids.length === 2) {
+      padMoveLast = null;           // 切换到双指滚动
+      scrollTouch = e.changedTouches[0].identifier;
+    }
+    hint.style.display = "none";
+  }, { passive: false });
+
+  pad.addEventListener("touchmove", function (e) {
+    e.preventDefault();
+    var ids = Object.keys(touches);
+    if (ids.length === 1) {
+      var t = e.changedTouches[0];
+      var st = touches[t.identifier];
+      if (!st) return;
+      st.moved = st.moved || Math.abs(t.clientX - st.startX) > TAP_DIST || Math.abs(t.clientY - st.startY) > TAP_DIST;
+      if (padMoveLast) {
+        var dx = (t.clientX - padMoveLast.x) * SENS;
+        var dy = (t.clientY - padMoveLast.y) * SENS;
+        if (Math.abs(dx) > 0.4 || Math.abs(dy) > 0.4) send({ t: "move", dx: dx, dy: dy });
+        padMoveLast = { x: t.clientX, y: t.clientY };
+      }
+    } else if (ids.length >= 2) {
+      for (var i = 0; i < e.changedTouches.length; i++) {
+        var t2 = e.changedTouches[i];
+        if (t2.identifier !== scrollTouch) continue;
+        var st2 = touches[t2.identifier];
+        if (!st2) continue;
+        st2.moved = true;
+        var dy2 = (t2.clientY - st2.y) * 2;
+        if (Math.abs(dy2) > 0.4) send({ t: "scroll", dx: 0, dy: dy2 });
+        st2.x = t2.clientX; st2.y = t2.clientY;
+        scrollzone.classList.add("active");
+      }
+    }
+  }, { passive: false });
+
+  pad.addEventListener("touchend", function (e) {
+    e.preventDefault();
+    var ids = Object.keys(touches);
+    var now = Date.now();
+    // 双指轻点 = 右键
+    if (ids.length === 2) {
+      var allTaps = ids.every(function (k) {
+        var st = touches[k];
+        return !st.moved && (now - st.startT) < TAP_MS;
+      });
+      if (allTaps) { send({ t: "click", btn: "right" }); ripple(pad.clientWidth / 2, pad.clientHeight / 2); }
+      scrollzone.classList.remove("active");
+    } else if (ids.length === 1) {
+      var k = ids[0];
+      var st = touches[k];
+      if (st && !st.moved && (now - st.startT) < TAP_MS) {
+        send({ t: "click", btn: "left" });
+        var rect = pad.getBoundingClientRect();
+        ripple(st.startX - rect.left, st.startY - rect.top);
+      }
+    }
+    for (var i = 0; i < e.changedTouches.length; i++) delete touches[e.changedTouches[i].identifier];
+    if (Object.keys(touches).length === 0) { padMoveLast = null; scrollTouch = null; }
+  }, { passive: false });
+  pad.addEventListener("touchcancel", function (e) {
+    for (var i = 0; i < e.changedTouches.length; i++) delete touches[e.changedTouches[i].identifier];
+    if (Object.keys(touches).length === 0) { padMoveLast = null; scrollTouch = null; }
+  });
+
+  // ---- 滚动条（单指） ----
+  var szLastY = null;
+  scrollzone.addEventListener("touchstart", function (e) {
+    e.preventDefault();
+    szLastY = e.changedTouches[0].clientY;
+    scrollzone.classList.add("active");
+  }, { passive: false });
+  scrollzone.addEventListener("touchmove", function (e) {
+    e.preventDefault();
+    if (szLastY === null) return;
+    var t = e.changedTouches[0];
+    var dy = (t.clientY - szLastY) * 2;
+    if (Math.abs(dy) > 0.4) send({ t: "scroll", dx: 0, dy: dy });
+    szLastY = t.clientY;
+  }, { passive: false });
+  scrollzone.addEventListener("touchend", function (e) {
+    e.preventDefault();
+    szLastY = null;
+    scrollzone.classList.remove("active");
+  }, { passive: false });
+
+  // ---- 顶栏按钮 ----
+  document.getElementById("rcBtn").addEventListener("click", function () {
+    send({ t: "click", btn: "right" });
+  });
+  document.getElementById("kbBtn").addEventListener("click", function () {
+    kbpanel.classList.toggle("show");
+    this.classList.toggle("active");
+    if (kbpanel.classList.contains("show")) kbin.focus();
+  });
+  document.getElementById("kClose").addEventListener("click", function () {
+    kbpanel.classList.remove("show");
+    document.getElementById("kbBtn").classList.remove("active");
+    kbin.blur();
+  });
+  document.getElementById("kEnter").addEventListener("click", function () { send({ t: "key", value: "return" }); });
+  document.getElementById("kBack").addEventListener("click", function () {
+    if (!kbin.value) send({ t: "key", value: "backspace" });
+    else { kbin.value = kbin.value.slice(0, -1); syncSent(kbin.value); }
+  });
+
+  // 键盘增量发送（含中文候选词上屏兼容）
+  kbin.addEventListener("input", function () {
+    var v = kbin.value;
+    if (v.indexOf(sentText) === 0 && v.length >= sentText.length) {
+      var added = v.slice(sentText.length);
+      if (added) send({ t: "text", value: added });
+    } else {
+      var removed = sentText.length - v.length;
+      if (removed > 0) send({ t: "key", value: "backspace", count: removed });
+      if (v) send({ t: "text", value: v });
+    }
+    sentText = v;
+  });
+  function syncSent(v) { sentText = v; }
+
+  // ---- 启动：有记录的地址就自动连接 ----
+  ipin.value = host;
+  if (host) connect(host, true);
+
+  // 双击缩放防护（iOS Safari）
+  var lastTouchEnd = 0;
+  document.addEventListener("touchend", function (e) {
+    var now = Date.now();
+    if (now - lastTouchEnd < 300) e.preventDefault();
+    lastTouchEnd = now;
+  }, { passive: false });
+})();
+</script>
+</body>
+</html>
