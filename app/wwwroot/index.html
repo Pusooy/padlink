@@ -10,6 +10,7 @@
 <meta name="theme-color" content="#0e0f13">
 <link rel="manifest" href="/static/manifest.json">
 <link rel="apple-touch-icon" href="/static/icon.png">
+<script src="/static/lucide.min.js"></script>
 <title>PadLink 触控板</title>
 <style>
 :root {
@@ -30,43 +31,62 @@ html, body { height:100%; overflow:hidden; overscroll-behavior:none;
   font-family: -apple-system, "SF Pro Text", "PingFang SC", "Segoe UI", "Microsoft YaHei", sans-serif;
   user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; touch-action:none; }
 button { font-family: inherit; }
+svg.lucide { width:18px; height:18px; stroke-width:2; }
+button svg.lucide { pointer-events:none; }
 
-#app { display:flex; flex-direction:column; height:100%; max-width:560px; margin:0 auto;
+#app { display:flex; flex-direction:column; height:100%; max-width:640px; margin:0 auto;
   padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
 
 /* 顶栏 */
-#topbar { display:flex; align-items:center; gap:8px; padding:10px 14px 6px; }
+#topbar { display:flex; align-items:center; gap:8px; padding:10px 14px 4px; }
 #statusDot { width:9px; height:9px; border-radius:50%; background:var(--bad); transition:.25s; flex-shrink:0; }
 #statusDot.on { background:var(--ok); box-shadow:0 0 8px var(--ok); }
 #statusText { font-size:12.5px; color:var(--text2); flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .tbtn { border:1px solid var(--keyline); background:var(--key); color:var(--text); border-radius:11px;
-  padding:8px 13px; font-size:13.5px; cursor:pointer; transition:.15s; }
+  padding:8px 11px; font-size:13px; cursor:pointer; transition:.15s;
+  display:inline-flex; align-items:center; gap:5px; }
 .tbtn:active { transform:scale(.94); }
 .tbtn.active { border-color:var(--accent); color:var(--accent); background:var(--accent-soft); }
 
-/* 触控板 */
-#pad { flex:1; margin:6px 12px; border-radius:20px; background:var(--pad);
-  border:1px solid var(--padline); position:relative; overflow:hidden; box-shadow:var(--shadow); }
+/* 鼠标键栏 */
+#mousebar { display:flex; gap:7px; padding:6px 14px; }
+#mousebar .mbtn { flex:1; display:flex; flex-direction:column; align-items:center; gap:2px;
+  border:1px solid var(--keyline); background:var(--key); color:var(--text); border-radius:12px;
+  padding:7px 0 5px; font-size:10px; cursor:pointer; }
+#mousebar .mbtn svg.lucide { width:16px; height:16px; }
+#mousebar .mbtn:active { background:var(--accent-soft); border-color:var(--accent); transform:scale(.95); }
+#mousebar .mbtn.holding { background:var(--accent-soft); border-color:var(--accent); color:var(--accent); }
+
+/* 触控板 + 滚动 */
+#stage { flex:1; display:flex; flex-direction:column; gap:8px; margin:4px 12px 8px; min-height:0; }
+#pad { flex:1; border-radius:20px; background:var(--pad);
+  border:1px solid var(--padline); position:relative; overflow:hidden; box-shadow:var(--shadow); min-height:120px; }
 #hint { position:absolute; inset:0; display:flex; flex-direction:column; gap:6px; align-items:center;
   justify-content:center; color:var(--text2); font-size:13.5px; text-align:center; pointer-events:none;
   line-height:1.7; opacity:.75; }
 .ripple { position:absolute; width:16px; height:16px; margin:-8px 0 0 -8px; border-radius:50%;
   background:var(--accent); opacity:.4; pointer-events:none; animation:rip .32s ease-out forwards; }
 @keyframes rip { to { transform:scale(3.4); opacity:0; } }
-
-/* 滚动区 */
-#scrollzone { height:88px; margin:4px 12px 8px; border-radius:18px; background:var(--bg2);
+#scrollzone { height:78px; border-radius:18px; background:var(--bg2);
   border:1px solid var(--line); display:flex; align-items:center; justify-content:center;
-  color:var(--text2); font-size:12.5px; transition:.15s; }
+  color:var(--text2); font-size:12.5px; transition:.15s; flex-shrink:0; }
 #scrollzone.active { border-color:var(--accent); color:var(--accent); }
+
+/* 横屏：滚动条移到右侧 */
+@media (orientation: landscape) {
+  #stage { flex-direction:row; }
+  #scrollzone { width:64px; height:auto; writing-mode:vertical-rl; letter-spacing:3px; }
+}
 
 /* 底部面板容器 */
 .panel { position:fixed; left:0; right:0; bottom:0; z-index:20; background:var(--panel);
   border-radius:22px 22px 0 0; box-shadow:0 -8px 40px #00000030;
-  padding:10px 12px calc(12px + env(safe-area-inset-bottom));
-  transform:translateY(105%); transition:transform .28s cubic-bezier(.32,.72,.34,1); max-width:560px; margin:0 auto; }
+  padding:10px 14px calc(12px + env(safe-area-inset-bottom));
+  transform:translateY(105%); transition:transform .28s cubic-bezier(.32,.72,.34,1); max-width:640px; margin:0 auto; }
 .panel.show { transform:translateY(0); }
-.panel h3 { font-size:13px; color:var(--text2); font-weight:600; margin:10px 4px 8px; }
+.panel h3 { font-size:13px; color:var(--text2); font-weight:600; margin:10px 4px 8px;
+  display:flex; align-items:center; gap:6px; }
+.panel h3 .tbtn { margin-left:auto; padding:4px 9px; font-size:12px; }
 .grab { width:44px; height:4px; border-radius:2px; background:var(--line); margin:2px auto 10px; }
 
 /* 键盘面板 */
@@ -74,7 +94,7 @@ button { font-family: inherit; }
   background:var(--bg2); color:var(--text); outline:none; margin-bottom:8px; }
 #kbd { display:flex; flex-direction:column; gap:5px; }
 .krow { display:flex; gap:4px; }
-.key { flex:1; height:37px; border-radius:7px; border:1px solid var(--keyline); background:var(--key);
+.key { flex:1; height:36px; border-radius:7px; border:1px solid var(--keyline); background:var(--key);
   color:var(--text); font-size:14.5px; display:flex; flex-direction:column; align-items:center;
   justify-content:center; line-height:1.05; cursor:pointer; }
 .key small { font-size:9.5px; color:var(--text2); }
@@ -86,29 +106,40 @@ button { font-family: inherit; }
 .key.arrow { flex:.62; background:var(--bg2); font-size:13px; }
 
 /* Dock 面板 */
-#dock { height:auto; max-height:78vh; overflow-y:auto; }
-.wrow { display:flex; align-items:center; gap:8px; padding:10px 12px; border-radius:12px;
+#dock { height:auto; max-height:80vh; overflow-y:auto; }
+.wrow { display:flex; align-items:center; gap:10px; padding:9px 12px; border-radius:12px;
   background:var(--bg2); border:1px solid var(--line); margin-bottom:6px; }
+.wrow img.wicon { width:30px; height:30px; border-radius:7px; }
 .wrow .wt { flex:1; font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.wrow button { border:none; background:none; color:var(--accent); font-size:13.5px; padding:4px 6px; }
+.wrow button { border:none; background:none; color:var(--accent); font-size:13.5px; padding:4px 5px;
+  display:inline-flex; align-items:center; }
+.wrow button svg.lucide { width:16px; height:16px; }
 .wrow button.close { color:var(--bad); }
+.wrow button:active { opacity:.6; }
 #appsGrid { display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; margin-bottom:4px; }
-.appTile { display:flex; flex-direction:column; align-items:center; gap:6px; padding:13px 4px;
-  border-radius:14px; background:var(--bg2); border:1px solid var(--line); font-size:12px;
+.appTile { display:flex; flex-direction:column; align-items:center; gap:6px; padding:12px 4px;
+  border-radius:14px; background:var(--bg2); border:1px solid var(--line); font-size:11.5px;
   color:var(--text); cursor:pointer; }
 .appTile:active { background:var(--accent-soft); }
-.appTile span { font-size:19px; }
+.appTile img { width:34px; height:34px; border-radius:8px; }
 #mediaRow { display:flex; gap:8px; justify-content:space-between; margin-bottom:4px; }
-#mediaRow .key { flex:1; }
+#mediaRow .key { flex:1; display:flex; align-items:center; justify-content:center; }
 #scRow { display:flex; flex-wrap:wrap; gap:7px; }
 .chip { padding:8px 13px; border-radius:999px; border:1px solid var(--keyline); background:var(--key);
   font-size:13px; color:var(--text); cursor:pointer; }
 .chip:active { background:var(--accent-soft); border-color:var(--accent); }
 
+/* 设置滑杆 */
+.setRow { display:flex; align-items:center; gap:10px; padding:6px 2px; font-size:13px; color:var(--text2); }
+.setRow label { flex-shrink:0; width:72px; }
+.setRow input[type=range] { flex:1; accent-color: var(--accent); }
+.setRow .val { width:38px; text-align:right; color:var(--text); font-variant-numeric: tabular-nums; }
+
 /* 连接页 */
 #connect { position:fixed; inset:0; z-index:40; display:flex; flex-direction:column; gap:16px;
   align-items:center; justify-content:center; padding:0 34px; background:var(--bg); }
-#connect .logo { font-size:44px; }
+#connect .logo { color:var(--accent); }
+#connect .logo svg { width:64px; height:64px; }
 #connect h1 { font-size:30px; font-weight:700; letter-spacing:.5px; }
 #connect p { color:var(--text2); font-size:13.5px; text-align:center; line-height:1.7; }
 #ipin { width:100%; max-width:360px; font-size:17px; text-align:center; padding:13px; border-radius:14px;
@@ -119,9 +150,10 @@ button { font-family: inherit; }
 #scanBtn { background:none; border:none; color:var(--accent); font-size:14px; }
 #scanStatus { font-size:12px; color:var(--text2); min-height:16px; }
 
-@media (min-width: 700px) and (min-height: 600px) {
-  #app { border-left:1px solid var(--line); border-right:1px solid var(--line); }
-}
+#toast { position:fixed; left:50%; bottom:calc(90px + env(safe-area-inset-bottom)); transform:translateX(-50%);
+  background:#000c; color:#fff; padding:9px 16px; border-radius:10px; font-size:13px; z-index:99;
+  opacity:0; transition:.3s; pointer-events:none; max-width:80vw; text-align:center; }
+#toast.show { opacity:1; }
 </style>
 </head>
 <body>
@@ -130,13 +162,23 @@ button { font-family: inherit; }
   <div id="topbar">
     <div id="statusDot"></div>
     <div id="statusText">未连接</div>
-    <button class="tbtn" id="themeBtn">🌓</button>
-    <button class="tbtn" id="rcBtn">右键</button>
-    <button class="tbtn" id="kbBtn">键盘</button>
-    <button class="tbtn" id="dockBtn">Dock</button>
+    <button class="tbtn" id="fsBtn" title="全屏"><i data-lucide="maximize"></i></button>
+    <button class="tbtn" id="themeBtn" title="主题"><i data-lucide="moon"></i></button>
+    <button class="tbtn" id="kbBtn"><i data-lucide="keyboard"></i>键盘</button>
+    <button class="tbtn" id="dockBtn"><i data-lucide="layout-grid"></i>Dock</button>
   </div>
-  <div id="pad"><div id="hint">单指拖动 = 移动指针<br>轻点 = 左键 · 双指轻点 = 右键<br>双指滑动 = 滚动</div></div>
-  <div id="scrollzone">滚动区 · 单指上下滑动</div>
+  <div id="mousebar">
+    <button class="mbtn" id="mLeft"><i data-lucide="mouse-pointer-2"></i>左键</button>
+    <button class="mbtn" id="mMid"><i data-lucide="circle-dot"></i>中键</button>
+    <button class="mbtn" id="mRight"><i data-lucide="mouse-pointer-click"></i>右键</button>
+    <button class="mbtn" id="mBack"><i data-lucide="chevron-left"></i>后退</button>
+    <button class="mbtn" id="mFwd"><i data-lucide="chevron-right"></i>前进</button>
+    <button class="mbtn" id="mDrag"><i data-lucide="hand"></i>拖拽</button>
+  </div>
+  <div id="stage">
+    <div id="pad"><div id="hint">单指拖动 = 移动指针<br>轻点 = 左键 · 双指轻点 = 右键<br>双指滑动 = 滚动</div></div>
+    <div id="scrollzone">滚动区 · 单指上下滑动</div>
+  </div>
 </div>
 
 <!-- 键盘面板 -->
@@ -149,18 +191,28 @@ button { font-family: inherit; }
 <!-- Dock 面板 -->
 <div class="panel" id="dock">
   <div class="grab"></div>
-  <h3>窗口切换 <button class="tbtn" style="float:right;padding:4px 10px;font-size:12px" id="wrefresh">刷新</button></h3>
+  <div class="setRow">
+    <label>移动灵敏度</label>
+    <input type="range" id="sensSlider" min="0.8" max="3" step="0.1">
+    <span class="val" id="sensVal"></span>
+  </div>
+  <div class="setRow">
+    <label>滚动速度</label>
+    <input type="range" id="sScroll" min="1" max="4" step="0.5">
+    <span class="val" id="sScrollVal"></span>
+  </div>
+  <h3>窗口切换 <button class="tbtn" id="wrefresh"><i data-lucide="refresh-cw"></i></button></h3>
   <div id="winList"><div class="wrow"><div class="wt">（正在获取…）</div></div></div>
   <h3>打开应用</h3>
   <div id="appsGrid"></div>
   <h3>多媒体</h3>
   <div id="mediaRow">
-    <button class="key" data-media="media_previous">⏮</button>
-    <button class="key" data-media="media_play_pause">⏯</button>
-    <button class="key" data-media="media_next">⏭</button>
-    <button class="key" data-media="media_volume_down">🔉−</button>
-    <button class="key" data-media="media_volume_up">🔊+</button>
-    <button class="key" data-media="media_volume_mute">🔇</button>
+    <button class="key" data-media="media_previous"><i data-lucide="skip-back"></i></button>
+    <button class="key" data-media="media_play_pause"><i data-lucide="play"></i></button>
+    <button class="key" data-media="media_next"><i data-lucide="skip-forward"></i></button>
+    <button class="key" data-media="media_volume_down"><i data-lucide="volume-1"></i></button>
+    <button class="key" data-media="media_volume_up"><i data-lucide="volume-2"></i></button>
+    <button class="key" data-media="media_volume_mute"><i data-lucide="volume-x"></i></button>
   </div>
   <h3>快捷键</h3>
   <div id="scRow">
@@ -178,7 +230,7 @@ button { font-family: inherit; }
 
 <!-- 连接页 -->
 <div id="connect">
-  <div class="logo">🖱️</div>
+  <div class="logo"><i data-lucide="mouse-pointer-2"></i></div>
   <h1>PadLink</h1>
   <p>把手机变成 Windows 的触控板<br>请先在电脑启动 PadLink 托盘程序</p>
   <input id="ipin" type="text" placeholder="电脑 IP，如 192.168.1.100" autocapitalize="off" autocomplete="off" spellcheck="false">
@@ -187,15 +239,25 @@ button { font-family: inherit; }
   <div id="scanStatus"></div>
 </div>
 
+<div id="toast"></div>
+
 <script>
 (function () {
   "use strict";
-  var PORT = 8765, SENS = 1.6, TAP_MS = 260, TAP_DIST = 10;
+  var PORT = 8765, TAP_MS = 260, TAP_DIST = 10;
 
   var $ = function (id) { return document.getElementById(id); };
   var app=$("app"), connectPage=$("connect"), dot=$("statusDot"), statusText=$("statusText"),
       pad=$("pad"), hint=$("hint"), scrollzone=$("scrollzone"),
       kbpanel=$("kbpanel"), dock=$("dock"), kbin=$("kbin"), ipin=$("ipin"), sentText="";
+  var SENS = parseFloat(localStorage.getItem("pl_sens") || "1.6");
+  var SCROLL = parseFloat(localStorage.getItem("pl_sscroll") || "2");
+  function buzz(ms) { try { navigator.vibrate && navigator.vibrate(ms); } catch (e) {} }
+  function toast(msg) {
+    var t = $("toast"); t.textContent = msg; t.classList.add("show");
+    clearTimeout(t._tm); t._tm = setTimeout(function () { t.classList.remove("show"); }, 2200);
+  }
+  function icons() { try { window.lucide && lucide.createIcons(); } catch (e) {} }
 
   var ws=null, pingTimer=null, reconnectTimer=null;
   var host = localStorage.getItem("pl_host") || "";
@@ -208,10 +270,20 @@ button { font-family: inherit; }
     localStorage.setItem("pl_theme", t);
     var meta = document.querySelector('meta[name="theme-color"]');
     if (meta) meta.content = t === "light" ? "#f5f6f8" : "#0e0f13";
+    $("themeBtn").innerHTML = '<i data-lucide="' + (t === "dark" ? "sun" : "moon") + '"></i>';
+    icons();
   }
-  applyTheme(theme);
   $("themeBtn").addEventListener("click", function () {
-    theme = theme === "dark" ? "light" : "dark"; applyTheme(theme);
+    theme = theme === "dark" ? "light" : "dark"; applyTheme(theme); buzz(8);
+  });
+
+  /* ---------- 全屏 ---------- */
+  $("fsBtn").addEventListener("click", function () {
+    try {
+      if (document.fullscreenElement) { document.exitFullscreen(); return; }
+      if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen();
+      else toast("此浏览器不支持全屏：iPhone 请「添加到主屏幕」获得全屏体验");
+    } catch (e) { toast("全屏失败"); }
   });
 
   /* ---------- 连接 ---------- */
@@ -258,7 +330,6 @@ button { font-family: inherit; }
   ipin.addEventListener("keydown", function (e) { if (e.key === "Enter") connect(ipin.value, false); });
 
   /* ---------- 局域网自动搜索 ---------- */
-  // 浏览器无法发 UDP：通过 WebRTC 推断本机网段，再并发 HTTP 探测 /24
   function guessPrefix(cb) {
     try {
       var pc = new RTCPeerConnection({ iceServers: [] });
@@ -306,7 +377,7 @@ button { font-family: inherit; }
   });
 
   /* ---------- 触控板手势 ---------- */
-  var touches = {}, scrollTouch = null, padMoveLast = null;
+  var touches = {}, scrollTouch = null, padMoveLast = null, scrollAccum = 0;
   function ripple(x, y) {
     var r = document.createElement("div"); r.className = "ripple";
     r.style.left = x + "px"; r.style.top = y + "px";
@@ -320,7 +391,7 @@ button { font-family: inherit; }
     }
     var ids = Object.keys(touches);
     if (ids.length === 1) padMoveLast = { x:e.changedTouches[0].clientX, y:e.changedTouches[0].clientY };
-    else if (ids.length === 2) { padMoveLast = null; scrollTouch = e.changedTouches[0].identifier; }
+    else if (ids.length === 2) { padMoveLast = null; scrollTouch = e.changedTouches[0].identifier; scrollAccum = 0; }
     hint.style.display = "none";
   }, { passive:false });
   pad.addEventListener("touchmove", function (e) {
@@ -341,8 +412,10 @@ button { font-family: inherit; }
         if (t2.identifier !== scrollTouch) continue;
         var st2 = touches[t2.identifier]; if (!st2) continue;
         st2.moved = true;
-        var dy2 = (t2.clientY - st2.y) * 2;
+        var dy2 = (t2.clientY - st2.y) * SCROLL;
         if (Math.abs(dy2) > 0.4) send({ t:"scroll", dx:0, dy:dy2 });
+        scrollAccum += Math.abs(dy2);
+        if (scrollAccum > 30) { buzz(6); scrollAccum = 0; }
         st2.x = t2.clientX; st2.y = t2.clientY;
         scrollzone.classList.add("active");
       }
@@ -353,12 +426,12 @@ button { font-family: inherit; }
     var ids = Object.keys(touches), now = Date.now();
     if (ids.length === 2) {
       var allTaps = ids.every(function (k) { var s = touches[k]; return s && !s.moved && (now - s.st) < TAP_MS; });
-      if (allTaps) { send({ t:"click", btn:"right" }); ripple(pad.clientWidth/2, pad.clientHeight/2); }
+      if (allTaps) { send({ t:"click", btn:"right" }); buzz(14); ripple(pad.clientWidth/2, pad.clientHeight/2); }
       scrollzone.classList.remove("active");
     } else if (ids.length === 1) {
       var s = touches[ids[0]];
       if (s && !s.moved && (now - s.st) < TAP_MS) {
-        send({ t:"click", btn:"left" });
+        send({ t:"click", btn:"left" }); buzz(12);
         var rect = pad.getBoundingClientRect();
         ripple(s.sx - rect.left, s.sy - rect.top);
       }
@@ -373,25 +446,50 @@ button { font-family: inherit; }
 
   var szLastY = null;
   scrollzone.addEventListener("touchstart", function (e) {
-    e.preventDefault(); szLastY = e.changedTouches[0].clientY; scrollzone.classList.add("active");
+    e.preventDefault(); szLastY = e.changedTouches[0].clientY; scrollzone.classList.add("active"); scrollAccum = 0;
   }, { passive:false });
   scrollzone.addEventListener("touchmove", function (e) {
     e.preventDefault();
     if (szLastY === null) return;
-    var t = e.changedTouches[0], dy = (t.clientY - szLastY) * 2;
+    var t = e.changedTouches[0], dy = (t.clientY - szLastY) * SCROLL;
     if (Math.abs(dy) > 0.4) send({ t:"scroll", dx:0, dy:dy });
+    scrollAccum += Math.abs(dy);
+    if (scrollAccum > 30) { buzz(6); scrollAccum = 0; }
     szLastY = t.clientY;
   }, { passive:false });
   scrollzone.addEventListener("touchend", function (e) {
     e.preventDefault(); szLastY = null; scrollzone.classList.remove("active");
   }, { passive:false });
 
-  $("rcBtn").addEventListener("click", function () { send({ t:"click", btn:"right" }); });
+  /* ---------- 鼠标五键 ---------- */
+  $("mLeft").addEventListener("click", function () { send({ t:"click", btn:"left" }); buzz(12); });
+  $("mMid").addEventListener("click", function () { send({ t:"click", btn:"middle" }); buzz(12); });
+  $("mRight").addEventListener("click", function () { send({ t:"click", btn:"right" }); buzz(14); });
+  $("mBack").addEventListener("click", function () { send({ t:"click", btn:"back" }); buzz(12); });
+  $("mFwd").addEventListener("click", function () { send({ t:"click", btn:"forward" }); buzz(12); });
+  // 拖拽：按住期间左键保持按下
+  (function () {
+    var b = $("mDrag");
+    function down(e) {
+      e.preventDefault(); e.stopPropagation();
+      if (!connected()) return;
+      send({ t:"down", btn:"left" }); buzz(16);
+      b.classList.add("holding");
+      b.addEventListener("pointerup", up); b.addEventListener("pointercancel", up);
+      b.setPointerCapture && e.pointerId != null && b.setPointerCapture(e.pointerId);
+    }
+    function up(e) {
+      send({ t:"up", btn:"left" });
+      b.classList.remove("holding");
+      b.removeEventListener("pointerup", up); b.removeEventListener("pointercancel", up);
+    }
+    b.addEventListener("pointerdown", down);
+  })();
 
   /* ---------- 键盘面板（86键） ---------- */
   var mods = [], shiftOn = false, capsOn = false;
   var ROWS = [
-    [["~","`"],["!","1"],["@","2"],["#","3"],["$","4"],["%","5"],["^","6"],["&","7"],["*","8"],["(","9"],[")","0"],["_","-"],["+","="],["⌫","backspace","w2"]],
+    [["~","`"],["!","1"],["@","2"],["#","3"],["\$","4"],["%","5"],["^","6"],["&","7"],["*","8"],["(","9"],[")","0"],["_","-"],["+","="],["⌫","backspace","w2"]],
     [["⇥","tab","w2"],["q"],["w"],["e"],["r"],["t"],["y"],["u"],["i"],["o"],["p"],["{","["],["}","]"],["|","\\"]],
     [["⇪","caps_lock"],["a"],["s"],["d"],["f"],["g"],["h"],["j"],["k"],["l"],[":",";"],["\"","'"],["⏎","enter","w2"]],
     [["⇧","shift","w25"],["z"],["x"],["c"],["v"],["b"],["n"],["m"],["<",","],[">","."],["?","/"],["⇧","shift","w25"]],
@@ -405,11 +503,10 @@ button { font-family: inherit; }
       row.forEach(function (k, ki) {
         var b = document.createElement("button");
         b.className = "key " + (k[2] || "");
-        b.dataset.ri = ri; b.dataset.ki = ki;
         if (k[0] && k[1] && k[0] !== k[1] && k[1].length === 1) {
           b.innerHTML = "<small>" + esc(k[0]) + "</small>" + esc(k[1]);
         } else b.textContent = k[1] === "space" ? "空格" : k[0];
-        b.addEventListener("click", function () { keyPress(ri, ki); });
+        b.addEventListener("click", function () { keyPress(ri, ki); buzz(8); });
         div.appendChild(b);
       });
       kbd.appendChild(div);
@@ -428,7 +525,7 @@ button { font-family: inherit; }
     var ch = name;
     if (ch.length === 1) {
       if (/[a-z]/.test(ch)) {
-        var upper = shiftOn !== capsOn;   // shift 与 caps 异或
+        var upper = shiftOn !== capsOn;
         ch = upper ? ch.toUpperCase() : ch;
       } else if (shiftOn) ch = k[0];
     }
@@ -453,7 +550,8 @@ button { font-family: inherit; }
     kbpanel.classList.toggle("show", show);
     dock.classList.remove("show");
     this.classList.toggle("active", show);
-    if (show) { kbin.focus(); refreshKbin(); }
+    if (show) { kbin.focus(); sentText = kbin.value; }
+    buzz(8);
   });
   kbin.addEventListener("input", function () {
     var v = kbin.value;
@@ -467,7 +565,6 @@ button { font-family: inherit; }
     }
     sentText = v;
   });
-  function refreshKbin() { sentText = kbin.value; }
 
   /* ---------- Dock 面板 ---------- */
   $("dockBtn").addEventListener("click", function () {
@@ -476,6 +573,7 @@ button { font-family: inherit; }
     kbpanel.classList.remove("show");
     this.classList.toggle("active", show);
     if (show) refreshDock();
+    buzz(8);
   });
   $("wrefresh").addEventListener("click", refreshDock);
   function refreshDock() {
@@ -488,38 +586,70 @@ button { font-family: inherit; }
     if (!list.length) { el.innerHTML = '<div class="wrow"><div class="wt">（没有可切换的窗口）</div></div>'; return; }
     list.forEach(function (w) {
       var row = document.createElement("div"); row.className = "wrow";
+      var img = document.createElement("img"); img.className = "wicon";
+      img.src = "/icon?pid=" + w.pid;
+      img.onerror = function () { img.style.display = "none"; };
       var t = document.createElement("div"); t.className = "wt"; t.textContent = w.title;
-      var f = document.createElement("button"); f.textContent = "切换";
-      f.addEventListener("click", function () { send({ t:"focus_window", id:w.id }); });
-      var m = document.createElement("button"); m.textContent = "最小化";
-      m.addEventListener("click", function () { send({ t:"min_window", id:w.id }); refreshDock(); });
-      var c = document.createElement("button"); c.textContent = "✕"; c.className = "close";
-      c.addEventListener("click", function () { send({ t:"close_window", id:w.id }); setTimeout(refreshDock, 400); });
-      row.appendChild(t); row.appendChild(f); row.appendChild(m); row.appendChild(c);
+      var f = document.createElement("button"); f.title = "切换";
+      f.innerHTML = '<i data-lucide="eye"></i>';
+      f.addEventListener("click", function () { send({ t:"focus_window", id:w.id }); buzz(10); });
+      var m = document.createElement("button"); m.title = "最小化";
+      m.innerHTML = '<i data-lucide="minus"></i>';
+      m.addEventListener("click", function () { send({ t:"min_window", id:w.id }); setTimeout(refreshDock, 500); });
+      var c = document.createElement("button"); c.title = "关闭"; c.className = "close";
+      c.innerHTML = '<i data-lucide="x"></i>';
+      c.addEventListener("click", function () {
+        send({ t:"close_window", id:w.id }); buzz(16);
+        c.style.opacity = ".35";
+        setTimeout(refreshDock, 1200);
+      });
+      row.appendChild(img); row.appendChild(t); row.appendChild(f); row.appendChild(m); row.appendChild(c);
       el.appendChild(row);
     });
+    icons();
   }
-  var APP_ICONS = { "记事本":"📝", "计算器":"🧮", "文件资源管理器":"📁", "命令提示符":"⌨", "任务管理器":"📊", "画图":"🎨", "浏览器":"🌐" };
   function renderApps(list) {
     var g = $("appsGrid"); g.innerHTML = "";
     list.forEach(function (a) {
       var b = document.createElement("button"); b.className = "appTile";
-      var icon = document.createElement("span");
-      icon.textContent = a.icon || APP_ICONS[a.name] || "🚀";
+      var img = document.createElement("img");
+      img.src = "/icon?app=" + encodeURIComponent(a.name);
+      img.onerror = function () {
+        var s = document.createElement("i"); s.setAttribute("data-lucide", "app-window");
+        img.replaceWith(s);
+      };
       var label = document.createElement("div"); label.textContent = a.name;
-      b.appendChild(icon); b.appendChild(label);
-      b.addEventListener("click", function () { send({ t:"open_app", name:a.name }); });
+      b.appendChild(img); b.appendChild(label);
+      b.addEventListener("click", function () { send({ t:"open_app", name:a.name }); buzz(12); });
       g.appendChild(b);
     });
+    icons();
   }
   document.querySelectorAll("[data-media]").forEach(function (b) {
-    b.addEventListener("click", function () { send({ t:"key", value: b.dataset.media }); });
+    b.addEventListener("click", function () { send({ t:"key", value: b.dataset.media }); buzz(10); });
   });
   document.querySelectorAll("[data-sc]").forEach(function (b) {
-    b.addEventListener("click", function () { send({ t:"key", value: b.dataset.sc }); });
+    b.addEventListener("click", function () { send({ t:"key", value: b.dataset.sc }); buzz(10); });
+  });
+
+  /* ---------- 灵敏度设置 ---------- */
+  var sensSlider = $("sensSlider"), sScroll = $("sScroll");
+  sensSlider.value = SENS; $("sensVal").textContent = SENS.toFixed(1);
+  sScroll.value = SCROLL; $("sScrollVal").textContent = SCROLL.toFixed(1);
+  sensSlider.addEventListener("input", function () {
+    SENS = parseFloat(this.value);
+    $("sensVal").textContent = SENS.toFixed(1);
+    localStorage.setItem("pl_sens", SENS);
+  });
+  sScroll.addEventListener("input", function () {
+    SCROLL = parseFloat(this.value);
+    $("sScrollVal").textContent = SCROLL.toFixed(1);
+    localStorage.setItem("pl_sscroll", SCROLL);
   });
 
   /* ---------- 启动 ---------- */
+  applyTheme(theme);
+  icons();
   ipin.value = host;
   if (host) connect(host, true);
   var lastTouchEnd = 0;

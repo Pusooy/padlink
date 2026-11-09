@@ -43,7 +43,9 @@ internal static class InputService
     private const uint INPUT_MOUSE = 0, INPUT_KEYBOARD = 1;
     private const uint MOUSEEVENTF_MOVE = 0x0001, LEFTDOWN = 0x0002, LEFTUP = 0x0004,
         RIGHTDOWN = 0x0008, RIGHTUP = 0x0010,
-        MIDDLEDOWN = 0x0020, MIDDLEUP = 0x0040, WHEEL = 0x0800;
+        MIDDLEDOWN = 0x0020, MIDDLEUP = 0x0040, WHEEL = 0x0800,
+        XDOWN = 0x0080, XUP = 0x0100;
+    private const uint XBUTTON1 = 0x0001, XBUTTON2 = 0x0002;
     private const uint KEYEVENTF_KEYUP = 0x0002, KEYEVENTF_UNICODE = 0x0004, EXTENDEDKEY = 0x0001;
     private const uint WHEEL_DELTA = 120;
 
@@ -71,18 +73,24 @@ internal static class InputService
     public static void MouseMove(double dx, double dy) => Mouse((int)dx, (int)dy, MOUSEEVENTF_MOVE);
     public static void MouseClick(string btn, int count = 1)
     {
-        for (int i = 0; i < count; i++)
+        for (int i = 0; i < count; i++) { MouseDown(btn); MouseUp(btn); }
+    }
+
+    /// <summary>支持五键：left / right / middle / back(X1) / forward(X2)。</summary>
+    public static void MouseDown(string btn) => XBtn(btn, down: true);
+    public static void MouseUp(string btn) => XBtn(btn, down: false);
+
+    private static void XBtn(string btn, bool down)
+    {
+        switch (btn)
         {
-            switch (btn)
-            {
-                case "right": Mouse(0, 0, RIGHTDOWN); Mouse(0, 0, RIGHTUP); break;
-                case "middle": Mouse(0, 0, MIDDLEDOWN); Mouse(0, 0, MIDDLEUP); break;
-                default: Mouse(0, 0, LEFTDOWN); Mouse(0, 0, LEFTUP); break;
-            }
+            case "right": Mouse(0, 0, down ? RIGHTDOWN : RIGHTUP); break;
+            case "middle": Mouse(0, 0, down ? MIDDLEDOWN : MIDDLEUP); break;
+            case "back": Mouse(0, 0, down ? XDOWN : XUP, XBUTTON1); break;
+            case "forward": Mouse(0, 0, down ? XDOWN : XUP, XBUTTON2); break;
+            default: Mouse(0, 0, down ? LEFTDOWN : LEFTUP); break;
         }
     }
-    public static void MouseDown(string btn) => Mouse(0, 0, btn == "right" ? RIGHTDOWN : btn == "middle" ? MIDDLEDOWN : LEFTDOWN);
-    public static void MouseUp(string btn) => Mouse(0, 0, btn == "right" ? RIGHTUP : btn == "middle" ? MIDDLEUP : LEFTUP);
     public static void Scroll(double dx, double dy)
     {
         // dy>0 = 手指下滑 = 内容向下 = 滚轮向后（负值）
@@ -91,8 +99,8 @@ internal static class InputService
         SendMouse(new MOUSEINPUT { mouseData = (uint)wheel, dwFlags = WHEEL });
     }
 
-    private static void Mouse(int dx, int dy, uint flags) =>
-        SendMouse(new MOUSEINPUT { dx = dx, dy = dy, dwFlags = flags });
+    private static void Mouse(int dx, int dy, uint flags, uint mouseData = 0) =>
+        SendMouse(new MOUSEINPUT { dx = dx, dy = dy, dwFlags = flags, mouseData = mouseData });
 
     private static void SendMouse(MOUSEINPUT mi) =>
         _ = SendInput(1, new[] { new INPUT { type = INPUT_MOUSE, U = new InputUnion { mi = mi } } }, INPUT.Size);

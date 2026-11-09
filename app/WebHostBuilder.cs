@@ -20,6 +20,23 @@ internal static class WebHostBuilder
                 {
                     app.UseWebSockets();
                     app.Map("/ws", branch => branch.Run(async ctx => await wsHandler(ctx)));
+                    // 应用/窗口真实图标: /icon?pid=123 或 /icon?app=记事本
+                    app.Map("/icon", branch => branch.Run(async ctx =>
+                    {
+                        var q = ctx.Request.Query;
+                        byte[]? png = null;
+                        if (q["pid"].Count > 0 && uint.TryParse(q["pid"], out var pid))
+                            png = IconService.GetForPid(pid);
+                        else if (q["app"].Count > 0)
+                        {
+                            var path = AppLauncher.ResolvePath(q["app"].ToString());
+                            if (path != null) png = IconService.GetForExe(path);
+                        }
+                        if (png == null) { ctx.Response.StatusCode = 404; return; }
+                        ctx.Response.ContentType = "image/png";
+                        ctx.Response.Headers.CacheControl = "public, max-age=86400";
+                        await ctx.Response.Body.WriteAsync(png);
+                    }));
                     // 静态文件（index.html / manifest.json / icon）
                     var wwwroot = Path.Combine(AppContext.BaseDirectory, "wwwroot");
                     app.Run(async ctx =>

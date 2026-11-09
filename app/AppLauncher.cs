@@ -115,6 +115,39 @@ internal static class AppLauncher
         catch (Exception ex) { DebugLog.Write($"open_app: {ex.Message}"); }
     }
 
+    /// <summary>按应用名解析可执行文件路径，用于图标提取；找不到返回 null。</summary>
+    public static string? ResolvePath(string name)
+    {
+        EnsureConfig();
+        try
+        {
+            using var doc = JsonDocument.Parse(File.ReadAllText(ConfigPath));
+            foreach (var a in doc.RootElement.GetProperty("apps").EnumerateArray())
+            {
+                if (string.Equals(a.GetProperty("name").GetString(), name, StringComparison.OrdinalIgnoreCase))
+                {
+                    var cmd = a.GetProperty("cmd").GetString()!;
+                    return ResolveCmd(cmd);
+                }
+            }
+        }
+        catch { }
+        return null;
+    }
+
+    private static string? ResolveCmd(string cmd)
+    {
+        try
+        {
+            var expanded = Environment.ExpandEnvironmentVariables(cmd);
+            if (File.Exists(expanded)) return Path.GetFullPath(expanded);
+            var sys = Environment.SystemDirectory;
+            var candidate = Path.Combine(sys, expanded.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ? expanded : expanded + ".exe");
+            return File.Exists(candidate) ? candidate : null;
+        }
+        catch { return null; }
+    }
+
     private static void EnsureConfig()
     {
         if (File.Exists(ConfigPath)) return;
