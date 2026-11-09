@@ -210,7 +210,7 @@ struct TouchpadView: View {
                 DragGesture(minimumDistance: 0)
                     .onChanged { value in
                         if let last = scrollLastY {
-                            let dy = value.location.y - last.y
+                            let dy = value.location.y - last
                             scrollAccum += abs(dy)
                             client.scroll(dx: 0, dy: dy * 2)
                             if scrollAccum > 24 {
