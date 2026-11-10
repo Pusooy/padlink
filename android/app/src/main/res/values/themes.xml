@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- AppCompat 主题：跨 Android 8 ~ 17 稳定，且支持 Material 外观与深色窗口 -->
+    <style name="AppTheme" parent="Theme.AppCompat.NoActionBar">
+        <item name="android:windowBackground">#0d0e12</item>
+        <item name="android:statusBarColor">#0d0e12</item>
+        <item name="android:navigationBarColor">#0d0e12</item>
+        <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="colorPrimary">#4c86ff</item>
+        <item name="colorAccent">#4c86ff</item>
+    </style>
+</resources>
