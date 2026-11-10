@@ -1,8 +1,7 @@
 name: Build IPA
 
 on:
-  push:
-    branches: [main]
+  # iOS 端已由安卓/PWA 取代，改为手动触发以节省 CI 配额
   workflow_dispatch:
 
 jobs:
