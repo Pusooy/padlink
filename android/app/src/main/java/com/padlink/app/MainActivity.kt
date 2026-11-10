@@ -55,6 +55,7 @@ class MainActivity : Activity() {
     private lateinit var connectPage: LinearLayout
     private lateinit var mainPage: LinearLayout
     private lateinit var hostInput: EditText
+    private lateinit var keyboardInput: EditText
     private lateinit var hintView: TextView
     private lateinit var padView: TouchpadView
 
@@ -308,7 +309,7 @@ class MainActivity : Activity() {
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(10), 0, dp(10), dp(8))
         }
-        val input = EditText(this).apply {
+        keyboardInput = EditText(this).apply {
             hint = "输入文字，实时打到电脑（缓冲整句发送）"
             textSize = 15f
             setSingleLine()
@@ -337,12 +338,12 @@ class MainActivity : Activity() {
             setTextColor(Color.parseColor("#5c8dff"))
             setPadding(dp(10), dp(6), dp(10), dp(6))
             setOnClickListener {
-                if (input.text.isEmpty()) sendKey("backspace")
-                else input.setText("")
+                if (keyboardInput.text.isEmpty()) sendKey("backspace")
+                else keyboardInput.setText("")
                 buzz(10, 180)
             }
         }
-        kbRow.addView(input)
+        kbRow.addView(keyboardInput)
         kbRow.addView(enterBtn)
         kbRow.addView(backBtn)
         mainPage.addView(kbRow)
@@ -350,7 +351,7 @@ class MainActivity : Activity() {
         setContentView(root)
 
         // 键盘缓冲清空模型（与网页端一致：整句发送后清空，杜绝镜像跳变）
-        input.addTextChangedListener(object : TextWatcher {
+        keyboardInput.addTextChangedListener(object : TextWatcher {
             override fun afterTextChanged(s: Editable?) {
                 handler.removeCallbacks(flushRun)
                 if (!s.isNullOrEmpty()) handler.postDelayed(flushRun, 320)
@@ -365,10 +366,10 @@ class MainActivity : Activity() {
     }
 
     private val flushRun = Runnable {
-        val v = hostInput.text.toString()
+        val v = keyboardInput.text.toString()
         if (v.isNotEmpty()) {
             sendText(v)
-            hostInput.setText("")
+            keyboardInput.setText("")
         }
     }
 
@@ -389,7 +390,7 @@ class MainActivity : Activity() {
                     connectPage.visibility = View.GONE
                     mainPage.visibility = View.VISIBLE
                     setStatus(true, "已连接 $h")
-                    buzz(12, 40, 12, 40, 24)
+                    buzzPattern(longArrayOf(12, 40, 12, 40, 24))
                     sendPing()
                     startPing()
                 }
@@ -467,9 +468,9 @@ class MainActivity : Activity() {
         if (v.isNotEmpty()) { sendText(v); hostInput.setText("") }
     }
 
-    private fun buzz(vararg pattern: Long) {
+    private fun buzzPattern(pattern: LongArray) {
         if (Build.VERSION.SDK_INT >= 26) {
-            val amps = pattern.map { if (it == 0L) 0 else 180 }.toIntArray()
+            val amps = pattern.map { if (it == 0L) 0 else 200 }.toIntArray()
             vibrator.vibrate(VibrationEffect.createWaveform(longArrayOf(0) + pattern, intArrayOf(0) + amps, -1))
         } else buzz(pattern.sum())
     }
