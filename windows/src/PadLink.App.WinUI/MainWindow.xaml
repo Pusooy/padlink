@@ -6,43 +6,125 @@
     Title="PadLink">
 
     <Grid x:Name="RootGrid" Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-        </Grid.RowDefinitions>
 
-        <!-- 自定义标题栏 -->
-        <Grid x:Name="AppTitleBar" Grid.Row="0" Height="48" Padding="16,0,0,0">
-            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Spacing="10">
-                <Image Source="ms-appx:///Assets/app.ico" Width="20" Height="20"/>
-                <TextBlock Text="PadLink" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center"/>
-            </StackPanel>
-        </Grid>
-
-        <!-- 主体导航 -->
-        <muxc:NavigationView x:Name="Nav" Grid.Row="1"
+        <!-- 导航（侧栏贯通整个窗口高度，避免「系统设置」式的顶部标题条割裂） -->
+        <muxc:NavigationView x:Name="Nav"
                              PaneDisplayMode="Left"
+                             OpenPaneLength="248"
+                             CompactPaneLength="48"
                              IsBackButtonVisible="Collapsed"
-                             IsSettingsVisible="True"
-                             OpenPaneLength="204"
+                             IsPaneToggleButtonVisible="False"
+                             IsSettingsVisible="False"
+                             IsTitleBarAutoPaddingEnabled="False"
                              SelectionChanged="Nav_SelectionChanged">
+
+            <!--
+                侧栏微调（配色/几何在 Themes/PadLinkStyles.xaml）
+                这里只调整分组标题与列表的呼吸感。
+            -->
+            <muxc:NavigationView.Resources>
+                <Thickness x:Key="NavigationViewItemInnerHeaderMargin">16,8,0,2</Thickness>
+            </muxc:NavigationView.Resources>
+
+            <!-- 品牌化头部：图标 + 产品名 + 副标题（占窗口左上角，同时作为窗口拖动区） -->
+            <muxc:NavigationView.PaneCustomContent>
+                <Grid x:Name="BrandHeader" Padding="16,12,16,16" Background="Transparent"
+                      MinHeight="56">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <Grid Width="38" Height="38" VerticalAlignment="Center">
+                        <!-- 强调色玻璃底座，让图标与侧栏背景有层次 -->
+                        <Border CornerRadius="10"
+                                Background="{ThemeResource AccentFillColorTertiaryBrush}"
+                                Opacity="0.30"/>
+                        <Image Source="ms-appx:///Assets/app.ico" Width="32" Height="32"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"
+                               AutomationProperties.Name="PadLink 应用图标"/>
+                    </Grid>
+
+                    <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
+                        <TextBlock Text="PadLink"
+                                   FontSize="16" FontWeight="SemiBold"
+                                   CharacterSpacing="-20"
+                                   Foreground="{ThemeResource TextFillColorPrimaryBrush}"/>
+                        <TextBlock Text="手机遥控台"
+                                   FontSize="11" CharacterSpacing="60"
+                                   Margin="0,1,0,0"
+                                   Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
+                    </StackPanel>
+                </Grid>
+            </muxc:NavigationView.PaneCustomContent>
+
             <muxc:NavigationView.MenuItems>
+                <muxc:NavigationViewItemHeader Content="主要"/>
+
                 <muxc:NavigationViewItem Content="概览" Tag="overview" IsSelected="True">
                     <muxc:NavigationViewItem.Icon>
                         <FontIcon Glyph="&#xE80F;"/>
                     </muxc:NavigationViewItem.Icon>
                 </muxc:NavigationViewItem>
+
+                <muxc:NavigationViewItemHeader Content="配置" Margin="0,8,0,0"/>
+
                 <muxc:NavigationViewItem Content="应用管理" Tag="apps">
                     <muxc:NavigationViewItem.Icon>
                         <FontIcon Glyph="&#xE71D;"/>
                     </muxc:NavigationViewItem.Icon>
+                    <muxc:NavigationViewItem.InfoBadge>
+                        <muxc:InfoBadge x:Name="AppsBadge"
+                                        Style="{StaticResource PadLinkCountBadgeStyle}"
+                                        Visibility="Collapsed"
+                                        AutomationProperties.Name="自定义应用数量"/>
+                    </muxc:NavigationViewItem.InfoBadge>
                 </muxc:NavigationViewItem>
+
                 <muxc:NavigationViewItem Content="客户端" Tag="clients">
                     <muxc:NavigationViewItem.Icon>
                         <FontIcon Glyph="&#xE8B9;"/>
                     </muxc:NavigationViewItem.Icon>
                 </muxc:NavigationViewItem>
             </muxc:NavigationView.MenuItems>
+
+            <!-- 底部固定状态区：发丝分隔线 + 连接状态圆点 + 版本号（与导航项视觉区分） -->
+            <muxc:NavigationView.PaneFooter>
+                <StackPanel x:Name="PaneFooterRoot" Padding="0,0,0,10">
+                    <Rectangle Height="1" Margin="16,0,16,12"
+                               Fill="{ThemeResource DividerStrokeColorDefaultBrush}"/>
+
+                    <Grid Padding="17,0,16,0" ColumnSpacing="9">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <!-- 连接状态：外圈是低透明度光晕，中心实心点，颜色来自 ViewModel -->
+                        <Grid Width="10" Height="10" VerticalAlignment="Center">
+                            <Ellipse Width="10" Height="10" Opacity="0.22"
+                                     Fill="{Binding StatusBrush, Mode=OneWay}"/>
+                            <Ellipse Width="6" Height="6" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                     Fill="{Binding StatusBrush, Mode=OneWay}"/>
+                        </Grid>
+
+                        <TextBlock Grid.Column="1"
+                                   Text="{Binding StatusText, Mode=OneWay}"
+                                   FontSize="12"
+                                   VerticalAlignment="Center"
+                                   TextTrimming="CharacterEllipsis"
+                                   ToolTipService.ToolTip="{Binding StatusText, Mode=OneWay}"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                    </Grid>
+
+                    <TextBlock Text="v2.0.0"
+                               Margin="17,5,16,0"
+                               FontSize="11"
+                               CharacterSpacing="40"
+                               Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
+                </StackPanel>
+            </muxc:NavigationView.PaneFooter>
+
             <Frame x:Name="ContentFrame"/>
         </muxc:NavigationView>
     </Grid>
