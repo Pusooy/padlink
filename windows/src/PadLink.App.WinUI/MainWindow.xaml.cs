@@ -23,9 +23,16 @@ public sealed partial class MainWindow : Window
 
         Title = "PadLink";
         ExtendsContentIntoTitleBar = true;
-        SetTitleBar(AppTitleBar);
+        // 品牌头部即窗口拖动区（内容区保持完全可交互）
+        SetTitleBar(BrandHeader);
 
         _vm = new ShellViewModel(settings);
+
+        // 侧栏底部状态区直接绑定 ShellViewModel（连接状态 / 连接数）
+        PaneFooterRoot.DataContext = _vm;
+        _vm.Apps.CollectionChanged += (_, _) => UpdateAppsBadge();
+        UpdateAppsBadge();
+
         ContentFrame.Navigate(typeof(OverviewPage), _vm);
 
         // 窗口尺寸
@@ -43,7 +50,6 @@ public sealed partial class MainWindow : Window
 
         // 跟随系统主题
         ApplySystemTheme();
-        RootGrid.ActualThemeChanged += (_, _) => { };
     }
 
     private void ApplySystemTheme()
@@ -57,6 +63,14 @@ public sealed partial class MainWindow : Window
             RootGrid.RequestedTheme = light ? ElementTheme.Light : ElementTheme.Dark;
         }
         catch { RootGrid.RequestedTheme = ElementTheme.Dark; }
+    }
+
+    /// <summary>「应用管理」右侧徽章：显示自定义应用数量，为空时隐藏。</summary>
+    private void UpdateAppsBadge()
+    {
+        var n = _vm.Apps.Count;
+        AppsBadge.Value = n;
+        AppsBadge.Visibility = n > 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void OnClosed(object sender, WindowEventArgs args)
