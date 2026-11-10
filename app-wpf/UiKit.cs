@@ -378,8 +378,25 @@ public static class Text
 /// </summary>
 public static class FluentIcons
 {
-    /// <summary>字体名；Win10 回退到 Segoe MDL2 Assets。</summary>
-    public static readonly FontFamily Family = new("Segoe Fluent Icons, Segoe MDL2 Assets");
+    /// <summary>字体实例：优先 Segoe Fluent Icons（Win11），缺失时回退 Segoe MDL2 Assets（Win10）。</summary>
+    public static readonly FontFamily Family = ResolveIconFont();
+
+    private static FontFamily ResolveIconFont()
+    {
+        // 逐一尝试，返回第一个在系统中真实存在的字体
+        foreach (var name in new[] { "Segoe Fluent Icons", "Segoe MDL2 Assets" })
+        {
+            try
+            {
+                var ff = new FontFamily(name);
+                // 用 GetTypefaces 探测是否可用（不存在时返回空集合）
+                var typefaces = ff.GetTypefaces();
+                if (typefaces != null && typefaces.Count > 0) return ff;
+            }
+            catch { }
+        }
+        return new FontFamily("Segoe UI");
+    }
 
     // ---- 常用字形（Win11 / Win10 MDL2 通用码点）----
     public const string Home = "\uE80F";            // 主页
@@ -405,6 +422,13 @@ public static class FluentIcons
     public const string Log = "\uE9D9";             // 日志/条目
     public const string Exit = "\uE8BB";            // 退出
     public const string Rocket = "\uE82D";          // 启动/发射
+    public const string Add = "\uE710";             // 加号
+    public const string Save = "\uE74E";            // 保存
+    public const string Delete = "\uE74D";          // 删除（垃圾桶）
+    public const string Edit = "\uE70F";            // 编辑
+    public const string Warning = "\uE7BA";         // 警告
+    public const string Globe = "\uE774";           // 网页
+
 
     /// <summary>创建一个 Fluent 图标 TextBlock。</summary>
     public static TextBlock Icon(string glyph, double size = 16, Brush? color = null) => new()
