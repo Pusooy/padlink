@@ -8,7 +8,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>PadLink</RootNamespace>
     <AssemblyName>PadLink</AssemblyName>
-    <ApplicationHighDpiMode>SystemAware</ApplicationHighDpiMode>
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <!-- 打包配置：单文件、自包含、不依赖目标机安装运行时 -->
     <PublishSingleFile>true</PublishSingleFile>
