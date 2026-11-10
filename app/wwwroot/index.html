@@ -43,8 +43,8 @@ button svg.lucide { pointer-events:none; }
 #statusDot.on { background:var(--ok); box-shadow:0 0 8px var(--ok); }
 #statusText { font-size:12.5px; color:var(--text2); flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .tbtn { border:1px solid var(--keyline); background:var(--key); color:var(--text); border-radius:11px;
-  padding:8px 11px; font-size:13px; cursor:pointer; transition:.15s;
-  display:inline-flex; align-items:center; gap:5px; }
+  padding:8px 9px; font-size:12.5px; cursor:pointer; transition:.15s;
+  display:inline-flex; align-items:center; gap:4px; flex-shrink:0; }
 .tbtn:active { transform:scale(.94); }
 .tbtn.active { border-color:var(--accent); color:var(--accent); background:var(--accent-soft); }
 
@@ -63,7 +63,8 @@ button svg.lucide { pointer-events:none; }
   border:1px solid var(--padline); position:relative; overflow:hidden; box-shadow:var(--shadow); min-height:120px; }
 #hint { position:absolute; inset:0; display:flex; flex-direction:column; gap:6px; align-items:center;
   justify-content:center; color:var(--text2); font-size:13.5px; text-align:center; pointer-events:none;
-  line-height:1.7; opacity:.75; }
+  line-height:1.7; opacity:.6; transition:opacity .4s; }
+#hint.dim { opacity:.06; }
 .ripple { position:absolute; width:16px; height:16px; margin:-8px 0 0 -8px; border-radius:50%;
   background:var(--accent); opacity:.4; pointer-events:none; animation:rip .32s ease-out forwards; }
 @keyframes rip { to { transform:scale(3.4); opacity:0; } }
@@ -88,6 +89,12 @@ button svg.lucide { pointer-events:none; }
   display:flex; align-items:center; gap:6px; }
 .panel h3 .tbtn { margin-left:auto; padding:4px 9px; font-size:12px; }
 .grab { width:44px; height:4px; border-radius:2px; background:var(--line); margin:2px auto 10px; }
+
+/* 拟态鼠标 */
+#mouseMock { display:flex; justify-content:center; }
+#mouseSvg { height: 46vh; max-height:300px; touch-action:none; }
+#mockLeft.hot, #mockRight.hot { fill: var(--accent-soft); }
+#mockWheel.hot { opacity: 1; }
 
 /* 键盘面板 */
 #kbin { width:100%; font-size:16px; padding:10px 13px; border-radius:12px; border:1px solid var(--keyline);
@@ -165,20 +172,33 @@ button svg.lucide { pointer-events:none; }
     <div id="statusText">未连接</div>
     <button class="tbtn" id="fsBtn" title="全屏"><i data-lucide="maximize"></i></button>
     <button class="tbtn" id="themeBtn" title="主题"><i data-lucide="moon"></i></button>
+    <button class="tbtn" id="mouseBtn"><i data-lucide="mouse"></i>鼠标</button>
     <button class="tbtn" id="kbBtn"><i data-lucide="keyboard"></i>键盘</button>
     <button class="tbtn" id="dockBtn"><i data-lucide="layout-grid"></i>Dock</button>
-  </div>
-  <div id="mousebar">
-    <button class="mbtn" id="mLeft"><i data-lucide="mouse-pointer-2"></i>左键</button>
-    <button class="mbtn" id="mMid"><i data-lucide="circle-dot"></i>中键</button>
-    <button class="mbtn" id="mRight"><i data-lucide="mouse-pointer-click"></i>右键</button>
-    <button class="mbtn" id="mBack"><i data-lucide="chevron-left"></i>后退</button>
-    <button class="mbtn" id="mFwd"><i data-lucide="chevron-right"></i>前进</button>
-    <button class="mbtn" id="mDrag"><i data-lucide="hand"></i>拖拽</button>
   </div>
   <div id="stage">
     <div id="pad"><div id="hint">单指拖动 = 移动指针<br>轻点 = 左键 · 双指轻点 = 右键<br>双指滑动 = 滚动 · 输入框支持中文</div></div>
     <div id="scrollzone">滚动区 · 单指上下滑动</div>
+  </div>
+</div>
+
+<!-- 拟态鼠标面板 -->
+<div class="panel" id="mousepanel">
+  <div class="grab"></div>
+  <h3>拟态鼠标 · 点按分区=按键 · 上下拖滚轮=滚动</h3>
+  <div id="mouseMock">
+    <svg id="mouseSvg" viewBox="0 0 200 300">
+      <path id="mockBody" d="M100,10 C158,10 176,58 176,138 C176,228 148,290 100,290 C52,290 24,228 24,138 C24,58 42,10 100,10 Z"
+            fill="var(--key)" stroke="var(--keyline)" stroke-width="2"/>
+      <path id="mockLeft" d="M97,14 L97,118 L38,118 C30,90 28,60 34,40 C40,20 62,14 97,14 Z"
+            fill="transparent" stroke="var(--keyline)" stroke-width="2"/>
+      <path id="mockRight" d="M103,14 C138,14 160,20 166,40 C172,60 170,90 162,118 L103,118 Z"
+            fill="transparent" stroke="var(--keyline)" stroke-width="2"/>
+      <line x1="24" y1="120" x2="176" y2="120" stroke="var(--keyline)" stroke-width="2"/>
+      <rect id="mockWheel" x="90" y="42" width="20" height="62" rx="10"
+            fill="var(--accent)" opacity="0.85"/>
+      <text id="mockLabel" x="100" y="205" text-anchor="middle" font-size="15" fill="var(--text2)">左键</text>
+    </svg>
   </div>
 </div>
 
@@ -201,6 +221,11 @@ button svg.lucide { pointer-events:none; }
     <label>滚动速度</label>
     <input type="range" id="sScroll" min="1" max="4" step="0.5">
     <span class="val" id="sScrollVal"></span>
+  </div>
+  <div class="setRow">
+    <label>帮助水印</label>
+    <input type="range" id="wmToggle" min="0" max="1" step="1">
+    <span class="val" id="wmVal"></span>
   </div>
   <h3>窗口切换 <button class="tbtn" id="wrefresh"><i data-lucide="refresh-cw"></i></button></h3>
   <div id="winList"><div class="wrow"><div class="wt">（正在获取…）</div></div></div>
@@ -254,6 +279,8 @@ button svg.lucide { pointer-events:none; }
   var SENS = parseFloat(localStorage.getItem("pl_sens") || "1.6");
   var SCROLL = parseFloat(localStorage.getItem("pl_sscroll") || "2");
   function buzz(ms) { try { navigator.vibrate && navigator.vibrate(ms); } catch (e) {} }
+  // 精细分档震动：轻点/普通/重按/中键节奏/滚轮刻度/开启
+  var VIB = { tap:10, click:16, heavy:24, wheelTick:5, middle:[8,30,8], open:[12,40,12,40,24] };
   function toast(msg) {
     var t = $("toast"); t.textContent = msg; t.classList.add("show");
     clearTimeout(t._tm); t._tm = setTimeout(function () { t.classList.remove("show"); }, 2200);
@@ -331,7 +358,19 @@ button svg.lucide { pointer-events:none; }
       }
     };
   }
-  $("connectBtn").addEventListener("click", function () { connect(ipin.value, false); });
+    function goFullscreen() {
+    try {
+      if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
+        document.documentElement.requestFullscreen().then(function () {
+          try { screen.orientation && screen.orientation.lock && screen.orientation.lock("landscape").catch(function(){}); } catch (e) {}
+        }).catch(function(){});
+      }
+    } catch (e) {}
+  }
+  $("connectBtn").addEventListener("click", function () {
+    goFullscreen();
+    connect(ipin.value, false);
+  });
   ipin.addEventListener("keydown", function (e) { if (e.key === "Enter") connect(ipin.value, false); });
 
   /* ---------- 局域网自动搜索 ---------- */
@@ -397,7 +436,8 @@ button svg.lucide { pointer-events:none; }
     var ids = Object.keys(touches);
     if (ids.length === 1) padMoveLast = { x:e.changedTouches[0].clientX, y:e.changedTouches[0].clientY };
     else if (ids.length === 2) { padMoveLast = null; scrollTouch = e.changedTouches[0].identifier; scrollAccum = 0; }
-    hint.style.display = "none";
+    if (watermarkOn) hint.classList.add("dim");
+    clearTimeout(hintTm);
   }, { passive:false });
   pad.addEventListener("touchmove", function (e) {
     e.preventDefault();
@@ -420,7 +460,7 @@ button svg.lucide { pointer-events:none; }
         var dy2 = (t2.clientY - st2.y) * SCROLL;
         if (Math.abs(dy2) > 0.4) send({ t:"scroll", dx:0, dy:dy2 });
         scrollAccum += Math.abs(dy2);
-        if (scrollAccum > 30) { buzz(6); scrollAccum = 0; }
+        if (scrollAccum > 30) { buzz(VIB.wheelTick); scrollAccum = 0; }
         st2.x = t2.clientX; st2.y = t2.clientY;
         scrollzone.classList.add("active");
       }
@@ -431,23 +471,32 @@ button svg.lucide { pointer-events:none; }
     var ids = Object.keys(touches), now = Date.now();
     if (ids.length === 2) {
       var allTaps = ids.every(function (k) { var s = touches[k]; return s && !s.moved && (now - s.st) < TAP_MS; });
-      if (allTaps) { send({ t:"click", btn:"right" }); buzz(14); ripple(pad.clientWidth/2, pad.clientHeight/2); }
+      if (allTaps) { send({ t:"click", btn:"right" }); buzz(VIB.heavy); ripple(pad.clientWidth/2, pad.clientHeight/2); }
       scrollzone.classList.remove("active");
     } else if (ids.length === 1) {
       var s = touches[ids[0]];
       if (s && !s.moved && (now - s.st) < TAP_MS) {
-        send({ t:"click", btn:"left" }); buzz(12);
+        send({ t:"click", btn:"left" }); buzz(VIB.tap);
         var rect = pad.getBoundingClientRect();
         ripple(s.sx - rect.left, s.sy - rect.top);
       }
     }
     for (var i = 0; i < e.changedTouches.length; i++) delete touches[e.changedTouches[i].identifier];
-    if (Object.keys(touches).length === 0) { padMoveLast = null; scrollTouch = null; }
+    if (Object.keys(touches).length === 0) { padMoveLast = null; scrollTouch = null; scheduleHintBack(); }
   }, { passive:false });
   pad.addEventListener("touchcancel", function (e) {
     for (var i = 0; i < e.changedTouches.length; i++) delete touches[e.changedTouches[i].identifier];
     if (Object.keys(touches).length === 0) { padMoveLast = null; scrollTouch = null; }
   });
+
+  // 帮助水印：默认显示，触摸时隐去，闲置 4 秒后恢复
+  var watermarkOn = localStorage.getItem("pl_watermark") !== "off";
+  var hintTm = null;
+  function scheduleHintBack() {
+    clearTimeout(hintTm);
+    hintTm = setTimeout(function () { if (watermarkOn) hint.classList.remove("dim"); }, 4000);
+  }
+  scheduleHintBack();
 
   var szLastY = null;
   scrollzone.addEventListener("touchstart", function (e) {
@@ -459,36 +508,72 @@ button svg.lucide { pointer-events:none; }
     var t = e.changedTouches[0], dy = (t.clientY - szLastY) * SCROLL;
     if (Math.abs(dy) > 0.4) send({ t:"scroll", dx:0, dy:dy });
     scrollAccum += Math.abs(dy);
-    if (scrollAccum > 30) { buzz(6); scrollAccum = 0; }
+    if (scrollAccum > 30) { buzz(VIB.wheelTick); scrollAccum = 0; }
     szLastY = t.clientY;
   }, { passive:false });
   scrollzone.addEventListener("touchend", function (e) {
-    e.preventDefault(); szLastY = null; scrollzone.classList.remove("active");
+    e.preventDefault(); szLastY = null; scrollzone.classList.remove("active"); scheduleHintBack();
   }, { passive:false });
 
-  /* ---------- 鼠标五键 ---------- */
-  $("mLeft").addEventListener("click", function () { send({ t:"click", btn:"left" }); buzz(12); });
-  $("mMid").addEventListener("click", function () { send({ t:"click", btn:"middle" }); buzz(12); });
-  $("mRight").addEventListener("click", function () { send({ t:"click", btn:"right" }); buzz(14); });
-  $("mBack").addEventListener("click", function () { send({ t:"click", btn:"back" }); buzz(12); });
-  $("mFwd").addEventListener("click", function () { send({ t:"click", btn:"forward" }); buzz(12); });
-  // 拖拽：按住期间左键保持按下
+  /* ---------- 拟态鼠标 ---------- */
+  $("mouseBtn").addEventListener("click", function () {
+    var show = !$("mousepanel").classList.contains("show");
+    $("mousepanel").classList.toggle("show", show);
+    kbpanel.classList.remove("show"); dock.classList.remove("show");
+    this.classList.toggle("active", show);
+    if (show) buzz(VIB.open);
+  });
+  function mockPress(el, fn) {
+    el.addEventListener("touchstart", function (e) {
+      e.preventDefault();
+      el.classList.add("hot");
+      if (fn.down) fn.down(e);
+    }, { passive:false });
+    el.addEventListener("touchmove", function (e) {
+      e.preventDefault();
+      if (fn.move) fn.move(e);
+    }, { passive:false });
+    var end = function (e) {
+      e.preventDefault();
+      el.classList.remove("hot");
+      if (fn.up) fn.up(e);
+    };
+    el.addEventListener("touchend", end, { passive:false });
+    el.addEventListener("touchcancel", end, { passive:false });
+    el.addEventListener("mousedown", function (e) { el.classList.add("hot"); if (fn.down) fn.down(e); });
+    el.addEventListener("mouseup", function (e) { el.classList.remove("hot"); if (fn.up) fn.up(e); });
+  }
+  mockPress($("mockLeft"), { down: function () { send({ t:"click", btn:"left" }); buzz(VIB.click); } });
+  mockPress($("mockRight"), { down: function () { send({ t:"click", btn:"right" }); buzz(VIB.heavy); } });
+  // 滚轮：纯点按=中键；上下拖=滚轮滚动
   (function () {
-    var b = $("mDrag");
-    function down(e) {
-      e.preventDefault(); e.stopPropagation();
-      if (!connected()) return;
-      send({ t:"down", btn:"left" }); buzz(16);
-      b.classList.add("holding");
-      b.addEventListener("pointerup", up); b.addEventListener("pointercancel", up);
-      b.setPointerCapture && e.pointerId != null && b.setPointerCapture(e.pointerId);
-    }
-    function up(e) {
-      send({ t:"up", btn:"left" });
-      b.classList.remove("holding");
-      b.removeEventListener("pointerup", up); b.removeEventListener("pointercancel", up);
-    }
-    b.addEventListener("pointerdown", down);
+    var lastY = null, acc = 0, dragged = false;
+    var wheel = $("mockWheel");
+    mockPress(wheel, {
+      down: function (e) {
+        lastY = (e.touches && e.touches[0]) ? e.touches[0].clientY : e.clientY;
+      },
+      move: function (e) {
+        if (lastY === null) return;
+        var y = (e.touches && e.touches[0]) ? e.touches[0].clientY : e.clientY;
+        var dy = (y - lastY) * SCROLL * 1.5;
+        if (Math.abs(dy) > 0.4) {
+          send({ t:"scroll", dx:0, dy:dy });
+          dragged = true;
+          acc += Math.abs(dy);
+          if (acc > 30) { buzz(VIB.wheelTick); acc = 0; }
+        }
+        lastY = y;
+      },
+      up: function () { lastY = null; }
+    });
+    wheel.addEventListener("touchstart", function () { dragged = false; }, { passive:false });
+    wheel.addEventListener("touchend", function (e) {
+      e.preventDefault();
+      wheel.classList.remove("hot");
+      if (!dragged) { buzz(VIB.middle); send({ t:"click", btn:"middle" }); }
+      lastY = null;
+    }, { passive:false });
   })();
 
   /* ---------- 键盘面板（86键） ---------- */
@@ -669,6 +754,19 @@ button svg.lucide { pointer-events:none; }
   var sensSlider = $("sensSlider"), sScroll = $("sScroll");
   sensSlider.value = SENS; $("sensVal").textContent = SENS.toFixed(1);
   sScroll.value = SCROLL; $("sScrollVal").textContent = SCROLL.toFixed(1);
+  var wmSlider = $("wmToggle");
+  function renderWm() {
+    wmSlider.value = watermarkOn ? 1 : 0;
+    $("wmVal").textContent = watermarkOn ? "开" : "关";
+    hint.style.display = watermarkOn ? "flex" : "none";
+    if (watermarkOn && !Object.keys(touches).length) hint.classList.remove("dim");
+  }
+  wmSlider.addEventListener("input", function () {
+    watermarkOn = this.value === "1";
+    localStorage.setItem("pl_watermark", watermarkOn ? "on" : "off");
+    renderWm();
+  });
+  renderWm();
   sensSlider.addEventListener("input", function () {
     SENS = parseFloat(this.value);
     $("sensVal").textContent = SENS.toFixed(1);

@@ -9,7 +9,7 @@ internal sealed class MainForm : Form
     private readonly Control _pageConn, _pageApps, _pageGeneral;
     private readonly Label _urlLabel, _ipLabel, _connCountLabel;
     private readonly DataGridView _grid;
-    private readonly CheckBox _autostartBox;
+    private readonly CheckBox _autostartBox, _autoPageBox;
     private System.Windows.Forms.Timer? _refreshTimer;
 
     private static readonly Color Accent = Color.FromArgb(92, 141, 255);
@@ -129,9 +129,18 @@ internal sealed class MainForm : Form
         };
         var btnLog = FlatButton("打开日志文件夹", Card, Color.White);
         btnLog.Click += (s, e) => Process.Start("explorer.exe", AppContext.BaseDirectory);
+        _autoPageBox = new CheckBox
+        {
+            Text = "启动时自动打开控制页（默认关）",
+            ForeColor = Color.White,
+            AutoSize = true,
+            Checked = AppSettings.AutoOpenPage,
+        };
+        _autoPageBox.CheckedChanged += (s, e) => AppSettings.AutoOpenPage = _autoPageBox.Checked;
         LayoutColumn(_pageGeneral, [
             Section("常规"),
             _autostartBox,
+            _autoPageBox,
             Row(btnLog),
             Section("关于"),
             DimLabel($"PadLink v1.1 · .NET 8 + WinForms\n端口 {TrayContext.Port} · WebSocket 明文协议，仅限可信局域网使用"),

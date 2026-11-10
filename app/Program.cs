@@ -22,6 +22,7 @@ internal static class Program
         var context = new TrayContext();
         context.StartServer();
         context.ShowStartupBalloon();
+        if (AppSettings.AutoOpenPage) context.OpenControlPage();
         Application.Run(context);
         context.StopServer();
     }
@@ -120,7 +121,7 @@ internal sealed class TrayContext : ApplicationContext
 
     private Task HandleWs(HttpContext ctx) => WebSocketHandler.Handle(ctx);
 
-    private void OpenControlPage()
+    public void OpenControlPage()
     {
         try { Process.Start(new ProcessStartInfo(BaseUrl) { UseShellExecute = true }); }
         catch { MessageBox.Show($"请手动打开：{BaseUrl}", "PadLink"); }
@@ -137,6 +138,30 @@ internal sealed class TrayContext : ApplicationContext
         {
             _mainForm.Activate();
         }
+    }
+}
+
+/// <summary>应用设置（HKCU\Software\PadLink）。</summary>
+internal static class AppSettings
+{
+    private const string Key = @"Software\PadLink";
+
+    public static bool AutoOpenPage
+    {
+        get => GetDword("AutoOpenPage") == 1;
+        set => SetDword("AutoOpenPage", value ? 1 : 0);
+    }
+
+    private static int GetDword(string name)
+    {
+        using var k = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(Key);
+        return k?.GetValue(name) is int v ? v : 0;
+    }
+
+    private static void SetDword(string name, int value)
+    {
+        using var k = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(Key);
+        k.SetValue(name, value, Microsoft.Win32.RegistryValueKind.DWord);
     }
 }
 
