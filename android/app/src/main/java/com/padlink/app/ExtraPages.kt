@@ -94,12 +94,14 @@ internal object ExtraPages {
             setPadding(0, dp(ctx, 4), 0, 0)
         }
 
+        lateinit var load: () -> Unit
+
         val bar = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
         }
         val info = tv(ctx, "点刷新获取画面", 11.5f, Colors.TEXT3)
-        val refresh = chip(ctx, "刷新") { buzz("tap"); load() }
+        val refresh = chip(ctx, "刷新") { buzz("tap"); load.invoke() }
         val autoBtn = chip(ctx, "自动") { }
         bar.addView(info, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
         bar.addView(refresh, LinearLayout.LayoutParams(
@@ -128,12 +130,12 @@ internal object ExtraPages {
         val autoTick = object : Runnable {
             override fun run() {
                 if (!autoRunning) return
-                load()
+                load.invoke()
                 handler.postDelayed(this, 1400)
             }
         }
 
-        fun load() {
+        load = fun () {
             val h = hostProvider()
             if (h.isEmpty()) return
             val url = "http://$h:8765/screen?w=1280&q=68&t=${System.currentTimeMillis()}"
@@ -161,9 +163,9 @@ internal object ExtraPages {
             autoRunning = !autoRunning
             autoBtn.setTextColor(if (autoRunning) Colors.ACCENT else Colors.TEXT)
             buzz("page")
-            if (autoRunning) { load(); handler.post(autoTick) } else handler.removeCallbacks(autoTick)
+            if (autoRunning) { load.invoke(); handler.post(autoTick) } else handler.removeCallbacks(autoTick)
         }
-        refresh.setOnClickListener { buzz("tap"); load() }
+        refresh.setOnClickListener { buzz("tap"); load.invoke() }
 
         // 点按 → 归一化坐标
         image.setOnTouchListener { v, ev ->
@@ -220,6 +222,10 @@ internal object ExtraPages {
             setPadding(0, dp(ctx, 4), 0, 0)
         }
 
+        var currentPath = ""
+        var parentPath: String? = null
+        lateinit var navigate: (String) -> Unit
+
         val bar = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -227,7 +233,7 @@ internal object ExtraPages {
         val upBtn = tv(ctx, "↑", 16f, Colors.TEXT2).apply {
             gravity = Gravity.CENTER
             background = bg(Colors.SURFACE, dp(ctx, 11).toFloat())
-            setOnClickListener { navigate(parentPath ?: "") }
+            setOnClickListener { navigate.invoke(parentPath ?: "") }
         }
         val pathView = tv(ctx, "选择位置", 12.5f, Colors.TEXT2).apply {
             maxLines = 1
@@ -249,9 +255,6 @@ internal object ExtraPages {
         val list = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL }
         scroll.addView(list)
         root.addView(scroll)
-
-        var currentPath = ""
-        var parentPath: String? = null
 
         fun row(entry: JSONObject) {
             val isDir = entry.optBoolean("dir")
@@ -297,7 +300,7 @@ internal object ExtraPages {
             }
             r.setOnClickListener {
                 buzz("tap")
-                if (isDir) navigate(path) else showPreview(activity, hostProvider(), path, name, entry.optString("ext")) { buzz(it) }
+                if (isDir) navigate.invoke(path) else showPreview(activity, hostProvider(), path, name, entry.optString("ext")) { buzz(it) }
             }
             list.addView(r, LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
@@ -316,7 +319,7 @@ internal object ExtraPages {
             }
         }
 
-        fun navigate(path: String) {
+        navigate = fun (path: String) {
             val h = hostProvider()
             if (h.isEmpty()) return
             val url = "http://$h:8765/files?path=" + URLEncoder.encode(path, "UTF-8")
@@ -354,7 +357,7 @@ internal object ExtraPages {
             })
         }
 
-        navigate("")
+        navigate.invoke("")
         return root
     }
 
