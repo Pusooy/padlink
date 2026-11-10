@@ -170,6 +170,51 @@ svg.lucide{width:20px;height:20px;stroke-width:2.1}
 .segRow button{padding:6px 12px;border-radius:8px;font-size:12.5px;color:var(--text2)}
 .segRow button.on{background:var(--surface);color:var(--text);box-shadow:0 1px 2px #0002}
 
+/* 屏幕页 */
+#screenPage{padding-top:6px;gap:8px}
+.screenBar{display:flex;align-items:center;gap:8px;flex-shrink:0}
+.screenInfo{margin-left:auto;font-size:11.5px;color:var(--text3)}
+#screenWrap{flex:1;position:relative;min-height:0;border-radius:var(--r);overflow:hidden;
+ background:#000;border:1px solid var(--line);display:flex;align-items:center;justify-content:center}
+#screenImg{max-width:100%;max-height:100%;object-fit:contain;display:none;cursor:crosshair}
+#screenTip{color:var(--text3);font-size:13px}
+#screenWrap.live #screenImg{display:block}
+#screenWrap.live #screenTip{display:none}
+.screenRipple{position:absolute;width:22px;height:22px;margin:-11px 0 0 -11px;border-radius:50%;
+ border:2px solid var(--accent);opacity:.9;pointer-events:none;animation:srip .5s ease-out forwards}
+@keyframes srip{to{transform:scale(2.6);opacity:0}}
+
+/* 文件页 */
+#filesPage{padding-top:6px;gap:8px}
+.fileBar{display:flex;align-items:center;gap:8px;flex-shrink:0}
+.fNav{width:38px;height:38px;border-radius:11px;background:var(--surface);border:1px solid var(--line);
+ display:flex;align-items:center;justify-content:center;color:var(--text2);flex-shrink:0}
+.fNav:active{background:var(--accentSoft);color:var(--accent)}
+.fNav svg.lucide{width:18px;height:18px}
+.filePath{flex:1;font-size:12.5px;color:var(--text2);white-space:nowrap;overflow:hidden;
+ text-overflow:ellipsis;background:var(--surface);border:1px solid var(--line);border-radius:11px;
+ padding:10px 12px}
+.fileList{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:6px;min-height:0}
+.fItem{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:12px;
+ background:var(--surface);border:1px solid var(--line)}
+.fItem:active{background:var(--accentSoft)}
+.fItem .fi{width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;
+ background:var(--surface2);color:var(--text2);flex-shrink:0}
+.fItem .fi svg.lucide{width:17px;height:17px}
+.fItem .fn{flex:1;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fItem .fs{font-size:11px;color:var(--text3);flex-shrink:0}
+.fItem .fx{width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;
+ color:var(--text3);flex-shrink:0}
+.filePreview{position:absolute;inset:0;background:var(--bg);z-index:6;display:flex;flex-direction:column;
+ padding:0 0 8px}
+.pvHead{display:flex;align-items:center;gap:10px;padding:0 0 8px;flex-shrink:0}
+.pvName{flex:1;font-size:13.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pvBody{flex:1;overflow:auto;border-radius:var(--r);background:var(--surface);
+ border:1px solid var(--line);padding:12px;font-size:13px;line-height:1.6;white-space:pre-wrap;
+ word-break:break-word;font-family:ui-monospace,Menlo,Consolas,monospace}
+.pvBody img{max-width:100%;border-radius:10px;display:block;margin:0 auto}
+.pvBody video,.pvBody audio{max-width:100%;border-radius:10px;display:block;margin:0 auto}
+
 /* Dock */
 #dock{flex-shrink:0;display:flex;align-items:stretch;gap:2px;padding:5px 8px calc(5px + env(safe-area-inset-bottom));
  background:var(--surface);border-top:1px solid var(--line);position:relative;z-index:10}
@@ -270,8 +315,13 @@ svg.lucide{width:20px;height:20px;stroke-width:2.1}
 
     <!-- 键盘 -->
     <section class="page" id="kbPage">
-      <input id="kbInput" placeholder="输入文字或使用下方键盘（支持中文）"
+      <div style="display:flex;gap:8px;flex-shrink:0">
+      <input id="kbInput" style="flex:1" placeholder="输入文字或使用下方键盘（支持中文）"
              autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+      <button id="voiceBtn" title="语音输入" style="width:46px;flex-shrink:0;border-radius:12px;
+       border:1px solid var(--line);background:var(--surface);color:var(--text2);display:flex;
+       align-items:center;justify-content:center"><i data-lucide="mic"></i></button>
+      </div>
       <div id="kbGrid"></div>
     </section>
 
@@ -305,6 +355,31 @@ svg.lucide{width:20px;height:20px;stroke-width:2.1}
         </div>
       </div>
       <div class="mediaCard">
+        <h4><i data-lucide="power"></i>电源</h4>
+        <div class="chipRow">
+          <button class="chip" data-power="lock"><i data-lucide="lock"></i>锁定</button>
+          <button class="chip" data-power="sleep"><i data-lucide="moon"></i>睡眠</button>
+          <button class="chip" data-power="signout"><i data-lucide="log-out"></i>注销</button>
+          <button class="chip" data-power="restart">重启</button>
+          <button class="chip" data-power="shutdown" style="color:var(--danger)">关机</button>
+        </div>
+      </div>
+      <div class="mediaCard">
+        <h4><i data-lucide="clipboard"></i>剪贴板</h4>
+        <div class="volRow" style="gap:8px">
+          <button class="chip" id="clipGet" style="flex-shrink:0"><i data-lucide="download"></i>取电脑</button>
+          <button class="chip" id="clipSend" style="flex-shrink:0"><i data-lucide="upload"></i>发到电脑</button>
+          <button class="chip" id="clipPaste" style="flex-shrink:0"><i data-lucide="clipboard-paste"></i>粘贴</button>
+        </div>
+        <textarea id="clipArea" placeholder="剪贴板内容（可编辑后发送）" style="margin-top:9px;width:100%;height:88px;
+         border-radius:11px;border:1px solid var(--line);background:var(--surface2);color:var(--text);
+         font-size:13px;padding:10px;resize:none;outline:none;font-family:inherit"></textarea>
+      </div>
+      <div class="mediaCard">
+        <h4><i data-lucide="activity"></i>主机状态</h4>
+        <div class="chipRow" id="sysInfo"><span style="color:var(--text3);font-size:12.5px">打开媒体页自动获取</span></div>
+      </div>
+      <div class="mediaCard">
         <h4><i data-lucide="clipboard"></i>编辑</h4>
         <div class="chipRow">
           <button class="chip" data-key="ctrl+c">复制</button>
@@ -332,6 +407,37 @@ svg.lucide{width:20px;height:20px;stroke-width:2.1}
       <div class="appGrid" id="appGrid" style="margin-top:9px"></div>
     </section>
 
+
+    <!-- 屏幕 -->
+    <section class="page" id="screenPage">
+      <div class="screenBar">
+        <button class="chip" id="screenRefresh"><i data-lucide="refresh-cw"></i>刷新</button>
+        <button class="chip" id="screenAuto"><i data-lucide="radio"></i>自动</button>
+        <span class="screenInfo" id="screenInfo">点按画面 = 点击该位置</span>
+      </div>
+      <div id="screenWrap">
+        <img id="screenImg" alt="">
+        <div id="screenTip">点「刷新」获取电脑屏幕</div>
+      </div>
+    </section>
+
+    <!-- 文件 -->
+    <section class="page" id="filesPage">
+      <div class="fileBar">
+        <button class="fNav" id="fileUp"><i data-lucide="arrow-up"></i></button>
+        <div class="filePath" id="filePath">选择位置</div>
+        <button class="fNav" id="fileUploadBtn"><i data-lucide="upload"></i></button>
+      </div>
+      <input type="file" id="fileInput" style="display:none" multiple>
+      <div class="fileList" id="fileList"></div>
+      <div class="filePreview" id="filePreview" style="display:none">
+        <div class="pvHead">
+          <div class="pvName" id="pvName"></div>
+          <button class="fNav" id="pvClose"><i data-lucide="x"></i></button>
+        </div>
+        <div class="pvBody" id="pvBody"></div>
+      </div>
+    </section>
     <!-- 设置 -->
     <section class="page" id="setPage">
       <div class="setGroup">
@@ -400,6 +506,8 @@ svg.lucide{width:20px;height:20px;stroke-width:2.1}
     <button class="dockBtn" data-page="kbPage"><i data-lucide="keyboard"></i>键盘</button>
     <button class="dockBtn" data-page="mediaPage"><i data-lucide="play-circle"></i>媒体</button>
     <button class="dockBtn" data-page="appsPage"><i data-lucide="layout-grid"></i>应用</button>
+    <button class="dockBtn" data-page="screenPage"><i data-lucide="monitor-play"></i>屏幕</button>
+    <button class="dockBtn" data-page="filesPage"><i data-lucide="folder-open"></i>文件</button>
     <button class="dockBtn" data-page="setPage"><i data-lucide="settings-2"></i>设置</button>
   </nav>
 </div>
@@ -510,6 +618,13 @@ function connect(h){
       case "pong": latency=Math.max(0,Date.now()-m.ts);setStatus();break;
       case "windows": renderWindows(m.list||[]);break;
       case "apps": renderApps(m.list||[]);break;
+      case "clipboard":
+        $("clipArea").value = m.text || "";
+        toast((m.text||"").length ? "已读取电脑剪贴板" : "剪贴板为空");
+        break;
+      case "sysinfo":
+        renderSysInfo(m.info);
+        break;
       case "volume":
         volume=m.level|0; muted=!!m.muted;
         $("volSlider").value=volume;
@@ -592,7 +707,9 @@ document.querySelectorAll(".dockBtn").forEach(function(b){
     buzz("page");
     if(page==="appsPage"){loadWindows();loadApps()}
     if(page==="kbPage") setTimeout(function(){$("kbInput").focus()},140);
-    if(page==="mediaPage") send({t:"get_volume"});
+    if(page==="mediaPage"){ send({t:"get_volume"}); send({t:"get_sysinfo"}); }
+    if(page==="screenPage") loadScreen();
+    if(page==="filesPage") loadFiles(fileCwd);
   });
 });
 
@@ -839,6 +956,227 @@ function applyAppFilter(q){
   icons();
 }
 $("appSearch").addEventListener("input",function(){applyAppFilter(this.value)});
+
+
+/* ========= 屏幕页（看屏幕 + 点按定位） ========= */
+var screenTimer=null, screenAuto=false;
+function loadScreen(){
+  var wrap=$("screenWrap"), img=$("screenImg");
+  var url="/screen?w=1280&q=70&t="+Date.now();
+  var pre=new Image();
+  pre.onload=function(){
+    img.src=url; wrap.classList.add("live");
+    $("screenInfo").textContent = pre.naturalWidth+"×"+pre.naturalHeight+" · 点按画面=点击";
+  };
+  pre.onerror=function(){ $("screenInfo").textContent="截屏失败"; };
+  pre.src=url;
+}
+$("screenRefresh").addEventListener("click",function(){ loadScreen(); buzz("tap") });
+$("screenAuto").addEventListener("click",function(){
+  screenAuto=!screenAuto;
+  this.classList.toggle("on",screenAuto);
+  this.style.color=screenAuto?"var(--accent)":"";
+  if(screenAuto){ loadScreen(); screenTimer=setInterval(loadScreen,1500) }
+  else { clearInterval(screenTimer); screenTimer=null }
+  buzz("page");
+});
+$("screenImg").addEventListener("click",function(e){
+  var r=this.getBoundingClientRect();
+  var nx=(e.clientX-r.left)/r.width, ny=(e.clientY-r.top)/r.height;
+  send({t:"screen_click",x:nx,y:ny,btn:"left"});
+  buzz("left");
+  var wr=$("screenWrap").getBoundingClientRect();
+  var rp=document.createElement("div"); rp.className="screenRipple";
+  rp.style.left=(e.clientX-wr.left)+"px";
+  rp.style.top=(e.clientY-wr.top)+"px";
+  $("screenWrap").appendChild(rp); setTimeout(function(){rp.remove()},520);
+});
+
+/* ========= 文件页 ========= */
+var fileCwd="", fileParent=null;
+function fmtSize(n){
+  if(!n) return "";
+  if(n<1024) return n+" B";
+  if(n<1048576) return (n/1024).toFixed(0)+" KB";
+  if(n<1073741824) return (n/1048576).toFixed(1)+" MB";
+  return (n/1073741824).toFixed(2)+" GB";
+}
+function fileIcon(entry){
+  if(entry.dir) return "folder";
+  var k=entry.ext;
+  if(["jpg","jpeg","png","gif","webp","bmp"].indexOf(k)>=0) return "image";
+  if(["mp4","webm","mkv","mov","avi"].indexOf(k)>=0) return "video";
+  if(["mp3","wav","flac","m4a","ogg"].indexOf(k)>=0) return "music";
+  if(["zip","rar","7z","tar","gz"].indexOf(k)>=0) return "archive";
+  if(["pdf"].indexOf(k)>=0) return "file-text";
+  return "file";
+}
+function loadFiles(path){
+  fetch("/files?path="+encodeURIComponent(path||""))
+    .then(function(r){return r.json()})
+    .then(function(d){
+      if(d.error){ toast(d.error); return }
+      fileCwd=d.path||""; fileParent=d.parent;
+      $("filePath").textContent=fileCwd||"选择位置";
+      var list=$("fileList"); list.innerHTML="";
+      if(d.roots && d.roots.length){
+        d.roots.forEach(function(root){
+          list.appendChild(fileRow({name:root.name,path:root.path,dir:true,size:0,ext:""}));
+        });
+        icons();
+        return;
+      }
+      var entries=d.entries||[];
+      entries.forEach(function(en){ list.appendChild(fileRow(en)) });
+      if(!entries.length) list.innerHTML='<div class="fItem"><div class="fn" style="color:var(--text3)">空目录</div></div>';
+      icons();
+    })
+    .catch(function(){ toast("读取目录失败") });
+}
+function fileRow(en){
+  var row=document.createElement("div"); row.className="fItem";
+  var ic=document.createElement("div"); ic.className="fi";
+  ic.innerHTML='<i data-lucide="'+fileIcon(en)+'"></i>';
+  var nm=document.createElement("div"); nm.className="fn";
+  nm.textContent = en.dir ? (en.name+"/") : en.name;
+  var sz=document.createElement("div"); sz.className="fs";
+  sz.textContent=en.dir?"":fmtSize(en.size);
+  row.appendChild(ic); row.appendChild(nm); row.appendChild(sz);
+  if(!en.dir){
+    var open=document.createElement("button"); open.className="fx"; open.title="用电脑打开";
+    open.innerHTML='<i data-lucide="external-link"></i>';
+    open.addEventListener("click",function(ev){
+      ev.stopPropagation(); send({t:"open_file",path:en.path}); buzz("tap");
+    });
+    row.appendChild(open);
+  }
+  row.addEventListener("click",function(){
+    buzz("tap");
+    if(en.dir) loadFiles(en.path); else previewFile(en);
+  });
+  return row;
+}
+var TEXT_EXT=["txt","md","log","json","xml","csv","js","ts","py","cs","java","c","cpp","h",
+              "html","css","sql","bat","ps1","ini","yml","yaml","cfg"];
+function previewFile(en){
+  var pv=$("filePreview"), body=$("pvBody"), name=$("pvName");
+  pv.style.display="flex"; name.textContent=en.name;
+  body.innerHTML='<span style="color:var(--text3)">加载中…</span>';
+  var k=fileIcon(en);
+  var url="/file?path="+encodeURIComponent(en.path);
+  if(k==="image"){
+    body.innerHTML='<img src="'+url+'" alt="">';
+  }else if(k==="video"){
+    body.innerHTML='<video src="'+url+'" controls playsinline></video>';
+  }else if(k==="music"){
+    body.innerHTML='<audio src="'+url+'" controls></audio>';
+  }else if(TEXT_EXT.indexOf(en.ext)>=0){
+    fetch(url).then(function(r){return r.json()}).then(function(d){
+      body.textContent=d.text||"";
+    }).catch(function(){ body.textContent="读取失败" });
+  }else{
+    body.innerHTML='<div style="color:var(--text2);font-size:13px">该类型不支持在线预览<br><br>'+
+      '<a href="'+url+'" download style="color:var(--accent)">下载到手机</a></div>';
+  }
+}
+$("pvClose").addEventListener("click",function(){ $("filePreview").style.display="none" });
+$("fileUp").addEventListener("click",function(){ loadFiles(fileParent||"") });
+$("fileUploadBtn").addEventListener("click",function(){ $("fileInput").click() });
+$("fileInput").addEventListener("change",function(){
+  var files=this.files; if(!files.length) return;
+  var dir=fileCwd||"";
+  if(!dir){ toast("请先进入一个目录再上传"); this.value=""; return }
+  var done=0, ok=0, total=files.length;
+  for(var i=0;i<total;i++){
+    (function(f){
+      var fd=new FormData(); fd.append("f",f,f.name);
+      fetch("/upload?dir="+encodeURIComponent(dir),{method:"POST",body:fd})
+        .then(function(r){return r.json()})
+        .then(function(d){ if(d.ok) ok++; })
+        .catch(function(){})
+        .then(function(){
+          done++;
+          if(done===total){ toast("上传完成 "+ok+"/"+total); loadFiles(dir); }
+        });
+    })(files[i]);
+  }
+  this.value="";
+});
+
+/* ========= 剪贴板 ========= */
+$("clipGet").addEventListener("click",function(){ send({t:"get_clipboard"}); buzz("tap") });
+$("clipSend").addEventListener("click",function(){
+  send({t:"set_clipboard",text:$("clipArea").value});
+  buzz("left"); toast("已发送到电脑剪贴板");
+});
+$("clipPaste").addEventListener("click",function(){ send({t:"key",value:"ctrl+v"}); buzz("tap") });
+
+/* ========= 电源 ========= */
+document.querySelectorAll("[data-power]").forEach(function(b){
+  b.addEventListener("click",function(){
+    var act=b.dataset.power;
+    var label={lock:"锁定",sleep:"睡眠",signout:"注销",restart:"重启",shutdown:"关机"}[act]||act;
+    if(act==="shutdown"||act==="restart"||act==="signout"){
+      if(!confirm("确定要"+label+"电脑吗？")) return;
+    }
+    send({t:"power",action:act});
+    buzz("heavy");
+    toast("已发送："+label);
+  });
+});
+
+/* ========= 主机状态 ========= */
+function renderSysInfo(info){
+  if(!info) return;
+  var box=$("sysInfo"); box.innerHTML="";
+  var items=[["CPU",info.cpu],["内存",info.ram],["运行",info.uptime],["主机",info.host]];
+  if(info.battery && info.battery!=="—") items.push(["电量",info.battery]);
+  items.forEach(function(kv){
+    var c=document.createElement("span");
+    c.className="chip"; c.style.pointerEvents="none";
+    c.textContent=kv[0]+" "+kv[1];
+    box.appendChild(c);
+  });
+}
+
+
+
+/* ========= 语音输入（Web Speech API） ========= */
+var recog = null, listening = false;
+$("voiceBtn").addEventListener("click", function () {
+  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { toast("此浏览器不支持语音识别（建议 Chrome）"); return; }
+  if (listening) {
+    listening = false;
+    try { recog.stop(); } catch (e) {}
+    this.style.color = ""; this.style.borderColor = "";
+    buzz("tap");
+    return;
+  }
+  recog = new SR();
+  recog.lang = "zh-CN";
+  recog.continuous = true;
+  recog.interimResults = false;
+  recog.onresult = function (ev) {
+    var txt = "";
+    for (var i = ev.resultIndex; i < ev.results.length; i++) {
+      if (ev.results[i].isFinal) txt += ev.results[i][0].transcript;
+    }
+    if (txt) { send({ t: "text", value: txt }); buzz("left"); toast("已输入：" + txt); }
+  };
+  recog.onerror = function (e) { toast("语音识别错误：" + e.error); };
+  recog.onend = function () {
+    if (listening) { try { recog.start(); } catch (e) {} }
+  };
+  try {
+    recog.start();
+    listening = true;
+    this.style.color = "var(--accent)";
+    this.style.borderColor = "var(--accent)";
+    buzz("page");
+    toast("正在听…再次点击停止");
+  } catch (e) { toast("启动失败：" + e.message); }
+});
 
 /* ========= 设置 ========= */
 function bindSlider(id,valId,get,set,fmt){
