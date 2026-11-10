@@ -3,3 +3,8 @@ obj/
 publish/
 *.log
 .vs/
+
+# WinUI 构建中间产物
+windows/out/
+windows/src/PadLink.Launcher/payload.zip
+dist/
