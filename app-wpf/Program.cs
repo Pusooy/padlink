@@ -75,12 +75,28 @@ internal sealed class TrayContext : IDisposable
 
         _tray = new NotifyIcon
         {
-            Icon = Icon.ExtractAssociatedIcon(Environment.ProcessPath ?? "") ?? SystemIcons.Application,
+            Icon = LoadTrayIcon(),
             Text = "PadLink 服务",
             ContextMenuStrip = menu,
             Visible = true,
         };
         _tray.DoubleClick += (s, e) => OpenMainWindow();
+    }
+
+    /// <summary>托盘图标：从 exe 内嵌资源读取（保证多尺寸清晰）。</summary>
+    private static Icon? LoadTrayIcon()
+    {
+        try
+        {
+            var exe = Environment.ProcessPath;
+            if (!string.IsNullOrEmpty(exe))
+            {
+                var fromExe = Icon.ExtractAssociatedIcon(exe);
+                if (fromExe != null) return fromExe;
+            }
+        }
+        catch { }
+        return SystemIcons.Application;
     }
 
     public static string LocalIP => NetworkService.GetLocalIP();
