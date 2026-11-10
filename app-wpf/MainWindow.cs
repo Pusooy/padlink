@@ -127,7 +127,8 @@ public sealed class MainWindow : Window
             Background = Tokens.AccentBrush, Margin = new Thickness(0, 0, 8, 0),
             Child = new TextBlock
             {
-                Text = "◉", Foreground = Brushes.White, FontSize = 14,
+                Text = FluentIcons.MousePointer, Foreground = Brushes.White,
+                FontFamily = FluentIcons.Family, FontSize = 13,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
             },
@@ -148,9 +149,9 @@ public sealed class MainWindow : Window
         titleRow.Children.Add(winBtns);
         _navPanel.Children.Add(titleRow);
 
-        AddNavItem("home", "◉", "概览");
-        AddNavItem("apps", "▦", "应用管理");
-        AddNavItem("settings", "⚙", "设置");
+        AddNavItem("home", FluentIcons.Home, "概览");
+        AddNavItem("apps", FluentIcons.Apps, "应用管理");
+        AddNavItem("settings", FluentIcons.Settings, "设置");
 
         // 右侧内容
         var contentWrap = new Grid();
@@ -208,8 +209,10 @@ public sealed class MainWindow : Window
         var stack = new StackPanel { Orientation = Orientation.Horizontal };
         var g = new TextBlock
         {
-            Text = glyph, FontSize = 14, Width = 24,
+            Text = glyph, FontSize = 15, Width = 26,
+            FontFamily = FluentIcons.Family,
             Foreground = Tokens.Ink2, VerticalAlignment = VerticalAlignment.Center,
+            TextAlignment = TextAlignment.Left,
         };
         var l = new TextBlock
         {
@@ -287,17 +290,17 @@ public sealed class MainWindow : Window
         inner.Children.Add(statusRow);
 
         var btns = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 16, 0, 0) };
-        var open = Buttons.Primary("打开控制页", (s, e) =>
+        var open = Buttons.PrimaryWithIcon(FluentIcons.Link, "打开控制页", (s, e) =>
         {
             try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(TrayContext.BaseUrl) { UseShellExecute = true }); }
             catch { }
         });
         open.Margin = new Thickness(0, 0, 10, 0);
-        var copy = Buttons.Ghost("复制地址", (s, e) =>
+        var copy = Buttons.GhostWithIcon(FluentIcons.Copy, "复制地址", (s, e) =>
         {
             try { Clipboard.SetText(TrayContext.BaseUrl); _ipText.Text = "已复制到剪贴板 ✓"; } catch { }
         });
-        var qr = Buttons.Ghost("显示二维码", (s, e) => ShowQrWindow());
+        var qr = Buttons.GhostWithIcon(FluentIcons.QRCode, "显示二维码", (s, e) => ShowQrWindow());
         qr.Margin = new Thickness(10, 0, 0, 0);
         btns.Children.Add(open);
         btns.Children.Add(copy);
@@ -321,19 +324,24 @@ public sealed class MainWindow : Window
         var grid = new UniformGrid { Columns = 2, Margin = new Thickness(0, 2, 0, 0) };
         foreach (var (icon, title, desc) in new[]
         {
-            ("◉", "触控板 + 手势", "单指移动 / 轻点左键 / 双指右键 / 滑动滚动"),
-            ("⌨", "86 键键盘 + 语音", "完整键盘布局，支持语音转文字直输"),
-            ("▶", "媒体与音量", "播放控制、主机音量滑杆、系统快捷键"),
-            ("▦", "应用与窗口", "实时窗口切换/关闭，程序搜索启动"),
-            ("▣", "屏幕镜像", "查看电脑画面，点按即定位点击"),
-            ("▤", "文件管理", "浏览/预览/上传/下载电脑文件"),
-            ("⎘", "剪贴板同步", "手机与电脑剪贴板双向互通"),
-            ("⏻", "电源控制", "锁定、睡眠、注销、重启、关机"),
+            (FluentIcons.MousePointer, "触控板 + 手势", "单指移动 / 轻点左键 / 双指右键 / 滑动滚动"),
+            (FluentIcons.Keyboard, "86 键键盘 + 语音", "完整键盘布局，支持语音转文字直输"),
+            (FluentIcons.Play, "媒体与音量", "播放控制、主机音量滑杆、系统快捷键"),
+            (FluentIcons.Apps, "应用与窗口", "实时窗口切换/关闭，程序搜索启动"),
+            (FluentIcons.Screen, "屏幕镜像", "查看电脑画面，点按即定位点击"),
+            (FluentIcons.Folder, "文件管理", "浏览/预览/上传/下载电脑文件"),
+            (FluentIcons.Copy, "剪贴板同步", "手机与电脑剪贴板双向互通"),
+            (FluentIcons.Power, "电源控制", "锁定、睡眠、注销、重启、关机"),
         })
         {
             var cell = new StackPanel { Margin = new Thickness(0, 6, 16, 6) };
             var head = new StackPanel { Orientation = Orientation.Horizontal };
-            head.Children.Add(new TextBlock { Text = icon, FontSize = 13, Foreground = Tokens.AccentBrush, Margin = new Thickness(0, 0, 7, 0) });
+            head.Children.Add(new TextBlock
+            {
+                Text = icon, FontSize = 14, FontFamily = FluentIcons.Family,
+                Foreground = Tokens.AccentBrush, Margin = new Thickness(0, 0, 8, 0),
+                VerticalAlignment = VerticalAlignment.Center,
+            });
             head.Children.Add(new TextBlock { Text = title, FontSize = 12.5, FontWeight = FontWeights.SemiBold, Foreground = Tokens.Ink });
             cell.Children.Add(head);
             cell.Children.Add(new TextBlock
