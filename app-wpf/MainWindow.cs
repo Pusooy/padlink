@@ -44,7 +44,7 @@ public sealed class MainWindow : Window
     private Ellipse _statusDot = new();
     private TextBlock _urlText = new();
     private TextBlock _ipText = new();
-    private DataGrid? _appsGrid;
+    private AppsPageView? _appsView;
     private string _activePage = "home";
 
     public MainWindow()
@@ -256,7 +256,6 @@ public sealed class MainWindow : Window
             label.Foreground = on ? Tokens.AccentBrush : Tokens.Ink2;
             glyph.Foreground = on ? Tokens.AccentBrush : Tokens.Ink2;
         }
-        if (key == "apps") LoadAppsIntoGrid();
     }
 
     // ================= 概览页 =================
@@ -377,103 +376,9 @@ public sealed class MainWindow : Window
     // ================= 应用管理页 =================
     private FrameworkElement BuildAppsPage()
     {
-        var stack = new StackPanel();
-        stack.Children.Add(Text.H1("应用管理"));
-        stack.Children.Add(Text.Sub("手机端「应用」页会自动列出开始菜单中的所有程序；这里可补充自定义启动项。"));
-
-        var card = new Card();
-        var inner = new StackPanel();
-
-        _appsGrid = new DataGrid
-        {
-            AutoGenerateColumns = false,
-            CanUserAddRows = true,
-            CanUserDeleteRows = true,
-            HeadersVisibility = DataGridHeadersVisibility.Column,
-            GridLinesVisibility = DataGridGridLinesVisibility.Horizontal,
-            Background = Tokens.CardBg,
-            Foreground = Tokens.Ink,
-            RowBackground = Tokens.CardBg,
-            AlternatingRowBackground = Tokens.CardAlt,
-            BorderBrush = Tokens.Edge,
-            BorderThickness = new Thickness(1),
-            HorizontalGridLinesBrush = Tokens.Edge,
-            RowHeight = 32,
-            MinHeight = 240,
-            FontSize = 12.5,
-        };
-        _appsGrid.Columns.Add(new DataGridTextColumn
-        {
-            Header = "名称（手机显示）",
-            Binding = new System.Windows.Data.Binding("Name"),
-            Width = new DataGridLength(1, DataGridLengthUnitType.Star),
-        });
-        _appsGrid.Columns.Add(new DataGridTextColumn
-        {
-            Header = "启动命令 / 路径 / URI",
-            Binding = new System.Windows.Data.Binding("Cmd"),
-            Width = new DataGridLength(1.4, DataGridLengthUnitType.Star),
-        });
-        inner.Children.Add(_appsGrid);
-
-        var btns = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 14, 0, 0) };
-        var save = Buttons.Primary("保存", (s, e) => SaveApps());
-        save.Margin = new Thickness(0, 0, 10, 0);
-        var add = Buttons.Ghost("添加一行", (s, e) => _appsGrid?.Items.Add(new AppRow("", "")));
-        add.Margin = new Thickness(0, 0, 10, 0);
-        var reload = Buttons.Ghost("重新载入", (s, e) => LoadAppsIntoGrid());
-        btns.Children.Add(save);
-        btns.Children.Add(add);
-        btns.Children.Add(reload);
-        inner.Children.Add(btns);
-
-        card.Child = inner;
-        stack.Children.Add(card);
-        return stack;
-    }
-
-    public sealed class AppRow
-    {
-        public string Name { get; set; } = "";
-        public string Cmd { get; set; } = "";
-        public AppRow() { }
-        public AppRow(string n, string c) { Name = n; Cmd = c; }
-    }
-
-    private void LoadAppsIntoGrid()
-    {
-        if (_appsGrid == null) return;
-        _appsGrid.Items.Clear();
-        try
-        {
-            foreach (dynamic a in AppLauncher.ListAppsRaw())
-                _appsGrid.Items.Add(new AppRow((string)a.name, (string)a.cmd));
-        }
-        catch { }
-    }
-
-    private void SaveApps()
-    {
-        if (_appsGrid == null) return;
-        try
-        {
-            var list = new List<(string, string)>();
-            foreach (var item in _appsGrid.Items)
-            {
-                if (item is not AppRow row) continue;
-                var n = (row.Name ?? "").Trim();
-                var c = (row.Cmd ?? "").Trim();
-                if (n.Length > 0 && c.Length > 0) list.Add((n, c));
-            }
-            AppLauncher.SaveApps(list);
-            MessageBox.Show(this, "已保存。手机端打开「应用」页刷新即可。", "PadLink",
-                MessageBoxButton.OK, MessageBoxImage.Information);
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show(this, "保存失败：" + ex.Message, "PadLink",
-                MessageBoxButton.OK, MessageBoxImage.Error);
-        }
+        var view = new AppsPageView();
+        _appsView = view;
+        return view;
     }
 
     // ================= 设置页 =================
