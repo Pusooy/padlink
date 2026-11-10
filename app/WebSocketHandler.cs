@@ -56,6 +56,22 @@ internal static class WebSocketHandler
                         await Reply(ws, new { t = "volume", level = st?.level ?? 0, muted = st?.muted ?? false });
                         continue;
                     }
+                    if (type == "get_clipboard")
+                    {
+                        await Reply(ws, new { t = "clipboard", text = ClipboardService.GetText() });
+                        continue;
+                    }
+                    if (type == "get_sysinfo")
+                    {
+                        await Reply(ws, new { t = "sysinfo", info = SystemInfoService.Snapshot() });
+                        continue;
+                    }
+                    if (type == "get_cursor")
+                    {
+                        var (nx, ny) = ScreenService.CursorNormalized();
+                        await Reply(ws, new { t = "cursor", x = nx, y = ny });
+                        continue;
+                    }
                     if (type == "search_programs")
                     {
                         var q = root.TryGetProperty("q", out var qEl) ? qEl.GetString() ?? "" : "";
@@ -123,6 +139,26 @@ internal static class WebSocketHandler
                     break;
                 case "toggle_mute":
                     VolumeService.ToggleMute();
+                    break;
+                case "set_clipboard":
+                    ClipboardService.SetText(GetS(e, "text", ""));
+                    break;
+                case "screen_click":
+                    ScreenService.MoveToNormalized(GetD(e, "x"), GetD(e, "y"));
+                    InputService.MouseClick(GetS(e, "btn", "left"));
+                    break;
+                case "screen_move":
+                    ScreenService.MoveToNormalized(GetD(e, "x"), GetD(e, "y"));
+                    break;
+                case "open_file":
+                    FileService.Open(GetS(e, "path", ""));
+                    break;
+                case "delete_file":
+                    if (FileService.Delete(GetS(e, "path", "")))
+                        DebugLog.Write("已删除文件");
+                    break;
+                case "power":
+                    PowerService.Perform(GetS(e, "action", ""));
                     break;
                 case "launch_program":
                     ProgramLauncher.Launch(GetS(e, "target", ""));
