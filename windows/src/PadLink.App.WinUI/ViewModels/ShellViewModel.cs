@@ -14,15 +14,30 @@ public partial class ShellViewModel : ObservableObject
     private readonly DispatcherQueueTimer _timer;
 
     [ObservableProperty] private string _url = "";
-    [ObservableProperty] private string _localIp = "";
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IpLine))]
+    private string _localIp = "";
     [ObservableProperty] private string _statusText = "等待连接";
     [ObservableProperty] private bool _isConnected;
-    [ObservableProperty] private int _connectedCount;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ConnectedCountText))]
+    private int _connectedCount;
     [ObservableProperty] private Microsoft.UI.Xaml.Media.Brush _statusBrush =
         new Microsoft.UI.Xaml.Media.SolidColorBrush(Microsoft.UI.Colors.Gray);
     [ObservableProperty] private PadLinkSettings _settingsRef;
 
     public ObservableCollection<AppEntryModel> Apps { get; } = new();
+
+    /// <summary>连接数量文案，供概览页「实时状态」卡片直接绑定。</summary>
+    public string ConnectedCountText => ConnectedCount > 0
+        ? $"{ConnectedCount} 台设备已连接"
+        : "暂无设备连接";
+
+    /// <summary>端口号，供概览页「实时状态」卡片展示。</summary>
+    public string PortText => _settings.Port.ToString();
+
+    /// <summary>局域网 IP + 端口的一行摘要。</summary>
+    public string IpLine => $"局域网 IP {LocalIp} · 端口 {PortText}";
 
     public ShellViewModel(PadLinkSettings settings)
     {
