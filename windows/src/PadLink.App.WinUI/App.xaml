@@ -6,6 +6,8 @@
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
                 <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
+                <!-- 必须在框架字典之后合并，才能覆盖 NavigationViewItem 的默认配色/几何 -->
+                <ResourceDictionary Source="ms-appx:///Themes/PadLinkStyles.xaml" />
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>
     </Application.Resources>
