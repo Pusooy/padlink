@@ -15,6 +15,9 @@
     <SelfContained>true</SelfContained>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <DebugType>none</DebugType>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
     <EnableDefaultApplicationDefinition>false</EnableDefaultApplicationDefinition>
   </PropertyGroup>
 
@@ -22,10 +25,12 @@
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
+  <!-- 全部前端资源嵌入 exe，运行时从程序集读取 —— 保证「纯单文件」分发 -->
   <ItemGroup>
-    <None Update="wwwroot\**\*">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
+    <EmbeddedResource Include="wwwroot\index.html" LogicalName="web.index.html" />
+    <EmbeddedResource Include="wwwroot\manifest.json" LogicalName="web.manifest.json" />
+    <EmbeddedResource Include="wwwroot\icon.png" LogicalName="web.icon.png" />
+    <EmbeddedResource Include="wwwroot\lucide.min.js" LogicalName="web.lucide.min.js" />
   </ItemGroup>
 
 </Project>
