@@ -50,6 +50,18 @@ internal static class WebSocketHandler
                         await Reply(ws, new { t = "apps", list = AppLauncher.ListApps() });
                         continue;
                     }
+                    if (type == "get_volume")
+                    {
+                        var st = VolumeService.GetState();
+                        await Reply(ws, new { t = "volume", level = st?.level ?? 0, muted = st?.muted ?? false });
+                        continue;
+                    }
+                    if (type == "search_programs")
+                    {
+                        var q = root.TryGetProperty("q", out var qEl) ? qEl.GetString() ?? "" : "";
+                        await Reply(ws, new { t = "programs", list = ProgramLauncher.Search(q) });
+                        continue;
+                    }
                     // 输入类指令可能高频，丢到线程池执行，避免阻塞收包
                     await Task.Run(() => Dispatch(type, root));
                 }
@@ -105,6 +117,15 @@ internal static class WebSocketHandler
                     break;
                 case "open_app":
                     AppLauncher.Open(GetS(e, "name", ""));
+                    break;
+                case "set_volume":
+                    VolumeService.SetLevel(GetI(e, "level", 50));
+                    break;
+                case "toggle_mute":
+                    VolumeService.ToggleMute();
+                    break;
+                case "launch_program":
+                    ProgramLauncher.Launch(GetS(e, "target", ""));
                     break;
             }
         }

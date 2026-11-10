@@ -74,7 +74,13 @@ internal static class AppLauncher
 {
     private static readonly string ConfigPath = Path.Combine(AppContext.BaseDirectory, "apps.json");
 
+    /// <summary>手机端应用页：合并 apps.json 自定义 + 开始菜单程序。</summary>
     public static List<object> ListApps()
+    {
+        return ProgramLauncher.Search("", 200);
+    }
+
+    private static List<object> ListConfiguredApps()
     {
         EnsureConfig();
         var list = new List<object>();
