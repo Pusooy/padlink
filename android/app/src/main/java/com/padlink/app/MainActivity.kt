@@ -18,6 +18,7 @@ import android.text.TextWatcher
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
+import android.view.ViewGroup
 import android.view.WindowInsets
 import android.view.WindowInsetsController
 import android.widget.Button
@@ -114,7 +115,7 @@ class MainActivity : Activity() {
     private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
 
     private fun bg(color: Int, radius: Float = 0f): GradientDrawable =
-        GradientDrawable().apply { setColor(color); if (radius > 0) cornerRadius = dp(radius.toInt().toFloat()) }
+        GradientDrawable().apply { setColor(color); if (radius > 0) cornerRadius = radius * resources.displayMetrics.density }
 
     private fun buildUi() {
         val root = LinearLayout(this).apply {
@@ -285,7 +286,6 @@ class MainActivity : Activity() {
             setTextColor(Color.WHITE)
             background = bg(Color.parseColor("#22242d"), 12f)
             layoutParams = LinearLayout.LayoutParams(0, dp(44), 1f)
-            @SuppressLint("ClickableViewAccessibility")
             setOnTouchListener { v, ev ->
                 when (ev.actionMasked) {
                     MotionEvent.ACTION_DOWN -> {
