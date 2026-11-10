@@ -1,7 +1,6 @@
 package com.padlink.app
 
 import android.annotation.SuppressLint
-import android.app.Activity
 import android.content.Context
 import android.content.pm.ActivityInfo
 import android.graphics.Bitmap
@@ -36,6 +35,7 @@ import android.widget.Switch
 import android.widget.TextView
 import okhttp3.Call
 import okhttp3.Callback
+import com.padlink.app.R
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -52,7 +52,7 @@ import kotlin.math.max
  * 全屏触控板为主体，底部 Dock 五页签（触控板 / 键盘 / 媒体 / 应用 / 设置）。
  * 震动通过 VibrationEffect 做振幅级精细调制（仿生手感）。
  */
-class MainActivity : Activity() {
+class MainActivity : androidx.appcompat.app.AppCompatActivity() {
 
     private val C_BG = Color.parseColor("#0d0e12")
     private val C_SURFACE = Color.parseColor("#15171d")
@@ -107,10 +107,35 @@ class MainActivity : Activity() {
     // ============ 生命周期 ============
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        vibrator = if (Build.VERSION.SDK_INT >= 31)
-            (getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager).defaultVibrator
-        else @Suppress("DEPRECATION") (getSystemService(VIBRATOR_SERVICE) as Vibrator)
+        // Android 16/17 对窗口 API 更严格：先设置主题再建视图，避免 Theme 应用失败导致白屏
+        try { setTheme(R.style.AppTheme) } catch (_: Throwable) { }
 
+        // 兜底：任何初始化异常都弹窗提示而不是闪退
+        Thread.setDefaultUncaughtExceptionHandler { _, ex ->
+            try {
+                android.util.Log.e("PadLink", "未捕获异常", ex)
+                runOnUiThread {
+                    android.app.AlertDialog.Builder(this)
+                        .setTitle("PadLink 启动异常")
+                        .setMessage(ex.stackTraceToString().take(1200))
+                        .setPositiveButton("确定", null)
+                        .show()
+                }
+            } catch (_: Throwable) { }
+        }
+
+        vibrator = try {
+            if (Build.VERSION.SDK_INT >= 31) {
+                val vm = getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
+                vm?.defaultVibrator ?: @Suppress("DEPRECATION") (getSystemService(VIBRATOR_SERVICE) as Vibrator)
+            } else {
+                @Suppress("DEPRECATION") (getSystemService(VIBRATOR_SERVICE) as Vibrator)
+            }
+        } catch (e: Throwable) {
+            @Suppress("DEPRECATION") (getSystemService(VIBRATOR_SERVICE) as Vibrator)
+        }
+
+        setupEdgeToEdge()
         hideSystemBars()
         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
         loadPrefs()
@@ -126,6 +151,15 @@ class MainActivity : Activity() {
         pingJob?.let { handler.removeCallbacks(it) }
         try { ws?.close(1000, null) } catch (_: Exception) {}
         super.onDestroy()
+    }
+
+    /** Android 15+ 强制 edge-to-edge（targetSdk 35）：把系统栏区域作为内边距传给根布局。 */
+    private fun setupEdgeToEdge() {
+        try {
+            if (Build.VERSION.SDK_INT >= 35) {
+                window.setDecorFitsSystemWindows(false)
+            }
+        } catch (_: Throwable) { }
     }
 
     private fun hideSystemBars() {
