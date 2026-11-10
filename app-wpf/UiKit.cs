@@ -289,6 +289,44 @@ public static class Buttons
         return b;
     }
 
+    /// <summary>带 Fluent 图标的按钮内容（图标 + 文字横排）。</summary>
+    private static StackPanel IconContent(string glyph, string text, Brush foreground)
+    {
+        var panel = new StackPanel { Orientation = Orientation.Horizontal };
+        panel.Children.Add(new TextBlock
+        {
+            Text = glyph,
+            FontFamily = FluentIcons.Family,
+            FontSize = 14,
+            Foreground = foreground,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 7, 0),
+        });
+        panel.Children.Add(new TextBlock
+        {
+            Text = text,
+            Foreground = foreground,
+            VerticalAlignment = VerticalAlignment.Center,
+        });
+        return panel;
+    }
+
+    public static Button PrimaryWithIcon(string glyph, string text, RoutedEventHandler onClick)
+    {
+        var b = Primary(text, onClick);
+        b.Content = IconContent(glyph, text, Brushes.White);
+        return b;
+    }
+
+    public static Button GhostWithIcon(string glyph, string text, RoutedEventHandler onClick,
+                                       Brush? fore = null)
+    {
+        var fg = fore ?? Tokens.Ink;
+        var b = Ghost(text, onClick, fore);
+        b.Content = IconContent(glyph, text, fg);
+        return b;
+    }
+
     private static ControlTemplate Rounded()
     {
         var t = new ControlTemplate(typeof(Button));
@@ -331,5 +369,51 @@ public static class Text
     {
         Text = s, FontFamily = new FontFamily("Consolas"), FontSize = 13,
         Foreground = Tokens.Ink2, TextWrapping = TextWrapping.Wrap,
+    };
+}
+
+/// <summary>
+/// Fluent 图标：使用 Windows 11 自带的 Segoe Fluent Icons 字体。
+/// 相比文字符号（◉ ▦ ⚙）是真正的矢量图标，与系统设置界面一致。
+/// </summary>
+public static class FluentIcons
+{
+    /// <summary>字体名；Win10 回退到 Segoe MDL2 Assets。</summary>
+    public static readonly FontFamily Family = new("Segoe Fluent Icons, Segoe MDL2 Assets");
+
+    // ---- 常用字形（Win11 / Win10 MDL2 通用码点）----
+    public const string Home = "\uE80F";            // 主页
+    public const string Settings = "\uE713";        // 齿轮
+    public const string Apps = "\uE71D";            // 应用网格
+    public const string MousePointer = "\uE962";    // 指针
+    public const string Keyboard = "\uE765";        // 键盘
+    public const string Play = "\uE768";            // 播放
+    public const string Screen = "\uE7F4";          // 显示器
+    public const string Folder = "\uE8B7";          // 文件夹
+    public const string Copy = "\uE8C8";            // 剪贴板
+    public const string Power = "\uE7E8";           // 电源
+    public const string Link = "\uE71B";            // 链接
+    public const string Refresh = "\uE72C";         // 刷新
+    public const string Info = "\uE946";            // 信息
+    public const string ChevronRight = "\uE76C";    // 右箭头
+    public const string ChevronLeft = "\uE76B";
+    public const string Check = "\uE73E";           // 对勾
+    public const string Copy2 = "\uE8C8";
+    public const string QRCode = "\uED14";          // 二维码
+    public const string FolderOpen = "\uE838";      // 打开文件夹
+    public const string Document = "\uE8A5";        // 文档
+    public const string Log = "\uE9D9";             // 日志/条目
+    public const string Exit = "\uE8BB";            // 退出
+    public const string Rocket = "\uE82D";          // 启动/发射
+
+    /// <summary>创建一个 Fluent 图标 TextBlock。</summary>
+    public static TextBlock Icon(string glyph, double size = 16, Brush? color = null) => new()
+    {
+        Text = glyph,
+        FontFamily = Family,
+        FontSize = size,
+        Foreground = color ?? Tokens.Ink2,
+        VerticalAlignment = VerticalAlignment.Center,
+        TextAlignment = TextAlignment.Center,
     };
 }
