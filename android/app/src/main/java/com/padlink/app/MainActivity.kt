@@ -99,7 +99,7 @@ class MainActivity : Activity() {
 
     private var dockButtons: List<LinearLayout> = emptyList()
     private val pages = LinkedHashMap<String, View>()
-    private val pageKeys = listOf("pad", "kb", "media", "apps", "settings")
+    private val pageKeys = listOf("pad", "kb", "media", "apps", "screen", "files", "settings")
 
     private val iconCache = HashMap<String, Bitmap>()
     private var allPrograms: List<JSONObject> = emptyList()
@@ -306,6 +306,8 @@ class MainActivity : Activity() {
         pages["kb"] = buildKeyboardPage()
         pages["media"] = buildMediaPage()
         pages["apps"] = buildAppsPage()
+        pages["screen"] = buildScreenPage()
+        pages["files"] = buildFilesPage()
         pages["settings"] = buildSettingsPage()
         pages.forEach { (_, v) ->
             pageHost.addView(v, FrameLayout.LayoutParams(
@@ -319,9 +321,11 @@ class MainActivity : Activity() {
             setPadding(dp(6), dp(4), dp(6), dp(4))
         }
         val labels = listOf("pad" to "触控板", "kb" to "键盘", "media" to "媒体",
-                            "apps" to "应用", "settings" to "设置")
+                            "apps" to "应用", "screen" to "屏幕", "files" to "文件",
+                            "settings" to "设置")
         val glyphs = mapOf("pad" to "◉", "kb" to "⌨", "media" to "▶",
-                           "apps" to "▦", "settings" to "⚙")
+                           "apps" to "▦", "screen" to "▣", "files" to "▤",
+                           "settings" to "⚙")
         dockButtons = labels.map { (key, label) ->
             LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
@@ -366,8 +370,13 @@ class MainActivity : Activity() {
         selectDockQuiet(key)
         buzz("page")
         when (key) {
-            "media" -> sendJson(JSONObject().put("t", "get_volume"))
+            "media" -> {
+                sendJson(JSONObject().put("t", "get_volume"))
+                sendJson(JSONObject().put("t", "get_sysinfo"))
+            }
             "apps" -> { loadWindows(); loadPrograms() }
+            "screen" -> Unit
+            "files" -> Unit
             "pad" -> hintVisible(true)
             "kb" -> kbInput.requestFocus()
         }
@@ -654,10 +663,68 @@ class MainActivity : Activity() {
         }
         sys.addView(chips)
         col.addView(sys, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-            topMargin = dp(10)
-        })
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+            .apply { topMargin = dp(10) })
+
+        // 剪贴板
+        val clipboard = ExtraPages.clipboardCard(
+            activity = this,
+            sendJson = { sendJson(it) },
+            buzz = { buzz(it) },
+            onToast = { msg -> android.widget.Toast.makeText(this, msg,
+                android.widget.Toast.LENGTH_SHORT).show() },
+            onClipboardReceived = { text -> ExtraPages.applyClipboard(text) },
+        )
+        col.addView(clipboard, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+            .apply { topMargin = dp(10) })
+
+        // 电源
+        val power = ExtraPages.powerCard(
+            activity = this,
+            sendJson = { sendJson(it) },
+            buzz = { buzz(it) },
+            onToast = { msg -> android.widget.Toast.makeText(this, msg,
+                android.widget.Toast.LENGTH_SHORT).show() },
+        )
+        col.addView(power, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+            .apply { topMargin = dp(10) })
+
+        // 主机状态
+        val (sysCard, updateSys) = ExtraPages.sysInfoCard(this)
+        sysInfoUpdater = updateSys
+        col.addView(sysCard, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+            .apply { topMargin = dp(10) })
+
         return scroll
+    }
+
+    private var sysInfoUpdater: ((JSONObject) -> Unit)? = null
+
+    // ============ 屏幕页 ============
+    private fun buildScreenPage(): View {
+        ExtraPages.bind(this)
+        return ExtraPages.screenPage(
+            activity = this,
+            hostProvider = { host },
+            sendJson = { sendJson(it) },
+            buzz = { buzz(it) },
+        )
+    }
+
+    // ============ 文件页 ============
+    private fun buildFilesPage(): View {
+        ExtraPages.bind(this)
+        return ExtraPages.filesPage(
+            activity = this,
+            hostProvider = { host },
+            sendJson = { sendJson(it) },
+            buzz = { buzz(it) },
+            onToast = { msg -> android.widget.Toast.makeText(this, msg,
+                android.widget.Toast.LENGTH_SHORT).show() },
+        )
     }
 
     // ============ 应用页 ============
@@ -1076,6 +1143,16 @@ class MainActivity : Activity() {
                     val arr = m.optJSONArray("list") ?: return
                     allPrograms = jsonList(arr)
                     renderPrograms(appSearch.text?.toString() ?: "")
+                }
+                "clipboard" -> {
+                    val text = m.optString("text", "")
+                    ExtraPages.applyClipboard(text)
+                    android.widget.Toast.makeText(this,
+                        if (text.isEmpty()) "电脑剪贴板为空" else "已读取电脑剪贴板",
+                        android.widget.Toast.LENGTH_SHORT).show()
+                }
+                "sysinfo" -> {
+                    m.optJSONObject("info")?.let { sysInfoUpdater?.invoke(it) }
                 }
                 "volume" -> {
                     val lv = m.optInt("level", -1)
