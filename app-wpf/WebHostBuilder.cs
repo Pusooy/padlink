@@ -142,31 +142,61 @@ internal static class WebHostBuilder
                             return;
                         }
 
-                        // --- 静态文件 ---
-                        var wwwroot = Path.Combine(AppContext.BaseDirectory, "wwwroot");
-                        var rel = path == "/" ? "/index.html" : path;
-                        if (rel.StartsWith("/static/", StringComparison.OrdinalIgnoreCase))
-                            rel = rel["/static/".Length..];
-                        var fileOnDisk = Path.Combine(wwwroot,
-                            rel.TrimStart('/').Replace('/', Path.DirectorySeparatorChar));
-                        if (!fileOnDisk.StartsWith(wwwroot, StringComparison.Ordinal) ||
-                            !File.Exists(fileOnDisk))
+                        // --- 静态文件（从嵌入资源读取，纯单文件 exe） ---
+                        var rel = path == "/" ? "index.html" : path.TrimStart('/');
+                        if (rel.StartsWith("static/", StringComparison.OrdinalIgnoreCase))
+                            rel = rel["static/".Length..];
+
+                        // 文件名安全校验（禁止穿越）
+                        if (rel.Contains("..") || rel.Contains(':'))
                         {
                             ctx.Response.StatusCode = 404;
                             return;
                         }
-                        ctx.Response.ContentType = Path.GetExtension(fileOnDisk).ToLowerInvariant() switch
+
+                        var asm = typeof(WebHostBuilder).Assembly;
+                        var resourceName = "web." + rel.Replace('/', '.');
+                        Stream? stream = null;
+                        // 允许 index.html / manifest.json / icon.png / lucide.min.js
+                        try { stream = asm.GetManifestResourceStream(resourceName); }
+                        catch { stream = null; }
+
+                        // 兼容旧部署：若 exe 旁存在 wwwroot 且资源缺失，则回退磁盘读取
+                        if (stream == null)
                         {
-                            ".html" => "text/html; charset=utf-8",
-                            ".json" => "application/json; charset=utf-8",
-                            ".png" => "image/png",
-                            ".jpg" or ".jpeg" => "image/jpeg",
-                            ".js" => "application/javascript; charset=utf-8",
-                            ".css" => "text/css; charset=utf-8",
-                            ".svg" => "image/svg+xml",
-                            _ => "application/octet-stream",
-                        };
-                        await ctx.Response.SendFileAsync(fileOnDisk);
+                            var disk = Path.Combine(AppContext.BaseDirectory, "wwwroot",
+                                rel.Replace('/', Path.DirectorySeparatorChar));
+                            if (File.Exists(disk))
+                                stream = File.OpenRead(disk);
+                        }
+
+                        if (stream == null)
+                        {
+                            ctx.Response.StatusCode = 404;
+                            await ctx.Response.WriteAsync("not found: " + rel);
+                            return;
+                        }
+
+                        using (stream)
+                        {
+                            ctx.Response.ContentType = rel.ToLowerInvariant() switch
+                            {
+                                var f when f.EndsWith(".html") => "text/html; charset=utf-8",
+                                var f when f.EndsWith(".json") => "application/json; charset=utf-8",
+                                var f when f.EndsWith(".png") => "image/png",
+                                var f when f.EndsWith(".jpg") || f.EndsWith(".jpeg") => "image/jpeg",
+                                var f when f.EndsWith(".js") => "application/javascript; charset=utf-8",
+                                var f when f.EndsWith(".css") => "text/css; charset=utf-8",
+                                var f when f.EndsWith(".svg") => "image/svg+xml",
+                                var f when f.EndsWith(".ico") => "image/x-icon",
+                                _ => "application/octet-stream",
+                            };
+                            // HTML 与图标不缓存，便于升级后立即生效；其余长缓存
+                            ctx.Response.Headers.CacheControl = rel.EndsWith(".html")
+                                ? "no-cache" : "public, max-age=86400";
+                            await stream.CopyToAsync(ctx.Response.Body);
+                        }
+                        return;
                     });
                 });
             })
