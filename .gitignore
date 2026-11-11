@@ -8,3 +8,4 @@ publish/
 windows/out/
 windows/src/PadLink.Launcher/payload.zip
 dist/
+android/app/build/
