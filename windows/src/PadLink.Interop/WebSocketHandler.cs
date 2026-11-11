@@ -39,6 +39,13 @@ public static class WebSocketHandler
                 } while (!result.EndOfMessage);
                 if (closed) break;
 
+                // 二进制帧 = 手机麦克风 PCM 音频流 → 电脑扬声器
+                if (result.MessageType == WebSocketMessageType.Binary)
+                {
+                    AudioPlaybackService.WritePcm(buffer[..len]);
+                    continue;
+                }
+
                 var payload = new ReadOnlyMemory<byte>(buffer, 0, len);
 
                 // ---- 紧凑高频协议（热路径，零堆分配）----
