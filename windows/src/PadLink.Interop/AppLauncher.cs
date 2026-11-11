@@ -84,41 +84,64 @@ public static class AppLauncher
         return ProgramLauncher.Search("", 200);
     }
 
-    private static List<object> ListConfiguredApps()
+    private sealed class AppEntry
+    {
+        public string Name { get; set; } = "";
+        public string Cmd { get; set; } = "";
+    }
+
+    private sealed class AppsFile
+    {
+        public List<AppEntry> Apps { get; set; } = new();
+    }
+
+    /// <summary>读取 apps.json。旧版文件键名大小写不一（Apps/Name/Cmd vs apps/name/cmd），
+    /// 必须大小写不敏感反序列化，否则 open_app 全部失效。</summary>
+    private static List<AppEntry> LoadApps()
     {
         EnsureConfig();
-        var list = new List<object>();
+        var opts = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
         try
         {
-            using var doc = JsonDocument.Parse(File.ReadAllText(ConfigPath));
-            foreach (var a in doc.RootElement.GetProperty("apps").EnumerateArray())
-            {
-                list.Add(new
-                {
-                    name = a.GetProperty("name").GetString(),
-                    cmd = a.GetProperty("cmd").GetString(),
-                    icon = a.TryGetProperty("icon", out var i) ? i.GetString() : null,
-                });
-            }
+            var f = JsonSerializer.Deserialize<AppsFile>(File.ReadAllText(ConfigPath), opts);
+            if (f?.Apps is { Count: > 0 } list) return list;
         }
-        catch (Exception ex) { Log.Info($"list_apps: {ex.Message}"); }
-        return list;
+        catch { }
+        try
+        {
+            // 兼容把数组直接写在根上的写法
+            var list = JsonSerializer.Deserialize<List<AppEntry>>(File.ReadAllText(ConfigPath), opts);
+            if (list != null) return list;
+        }
+        catch { }
+        return new List<AppEntry>();
+    }
+
+    private static List<object> ListConfiguredApps()
+    {
+        return LoadApps().Select(a => (object)new { name = a.Name, cmd = a.Cmd }).ToList();
     }
 
     public static void Open(string name)
     {
-        EnsureConfig();
+        if (string.IsNullOrWhiteSpace(name)) return;
         try
         {
-            using var doc = JsonDocument.Parse(File.ReadAllText(ConfigPath));
-            foreach (var a in doc.RootElement.GetProperty("apps").EnumerateArray())
+            var hit = LoadApps().FirstOrDefault(a =>
+                string.Equals(a.Name, name, StringComparison.OrdinalIgnoreCase));
+            if (hit != null)
             {
-                if (string.Equals(a.GetProperty("name").GetString(), name, StringComparison.OrdinalIgnoreCase))
-                {
-                    var cmd = a.GetProperty("cmd").GetString()!;
-                    Process.Start(new ProcessStartInfo(cmd) { UseShellExecute = true });
-                    return;
-                }
+                Process.Start(new ProcessStartInfo(hit.Cmd) { UseShellExecute = true });
+                return;
+            }
+            // apps.json 没有：开始菜单快捷方式兜底
+            var target = ProgramLauncher.FindTarget(name);
+            if (target != null)
+            {
+                if (target.EndsWith(".lnk", StringComparison.OrdinalIgnoreCase))
+                    target = ResolveShortcut(target) ?? target;
+                Process.Start(new ProcessStartInfo(target) { UseShellExecute = true });
+                return;
             }
             Log.Info($"open_app: 未找到应用 {name}");
         }
@@ -210,16 +233,7 @@ public static class AppLauncher
     /// <summary>给设置窗口用：返回 name/cmd 原始列表。</summary>
     public static List<object> ListAppsRaw()
     {
-        EnsureConfig();
-        var list = new List<object>();
-        try
-        {
-            using var doc = JsonDocument.Parse(File.ReadAllText(ConfigPath));
-            foreach (var a in doc.RootElement.GetProperty("apps").EnumerateArray())
-                list.Add(new { name = a.GetProperty("name").GetString(), cmd = a.GetProperty("cmd").GetString() });
-        }
-        catch { }
-        return list;
+        return LoadApps().Select(a => (object)new { name = a.Name, cmd = a.Cmd }).ToList();
     }
 
     /// <summary>保存应用列表到 apps.json。</summary>
