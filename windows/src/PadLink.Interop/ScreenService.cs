@@ -21,6 +21,12 @@ internal static class ScreenService
     [StructLayout(LayoutKind.Sequential)]
     private struct POINT { public int X, Y; }
 
+    private static int _activeMonitor = -1;
+
+    public static void SetActiveMonitor(int index) { _activeMonitor = index; }
+
+    public static int ActiveMonitor => _activeMonitor;
+
     public static (int w, int h) VirtualScreen()
     {
         // SM_XVIRTUALSCREEN=76, SM_YVIRTUALSCREEN=77, SM_CXVIRTUALSCREEN=78, SM_CYVIRTUALSCREEN=79
@@ -33,10 +39,33 @@ internal static class ScreenService
     /// <summary>截取主屏，缩放到指定宽度，JPEG 编码（质量适中，适合手机流量）。</summary>
     public static byte[]? CaptureJpeg(int targetWidth = 1280, int quality = 72)
     {
+        return CaptureJpeg(ActiveMonitor, targetWidth, quality);
+    }
+
+    public static byte[]? CaptureJpeg(int monitorIndex, int targetWidth, int quality)
+    {
         try
         {
-            var (vw, vh) = VirtualScreen();
-            int x = GetSystemMetrics(76), y = GetSystemMetrics(77);
+            int vx = GetSystemMetrics(76), vy = GetSystemMetrics(77);
+            int vw = GetSystemMetrics(78), vh = GetSystemMetrics(79);
+            int x, y, w, h;
+
+            if (monitorIndex >= 0)
+            {
+                // 截取指定显示器
+                var monitorList = MonitorService.ListMonitors();
+                var monitors = new List<(int Left, int Top, int Right, int Bottom)>();
+                foreach (dynamic m in monitorList)
+                    monitors.Add(((int)m.left, (int)m.top, (int)m.right, (int)m.bottom));
+                if (monitorIndex < monitors.Count)
+                {
+                    var r = monitors[monitorIndex];
+                    x = r.Left; y = r.Top; w = r.Right - r.Left; h = r.Bottom - r.Top;
+                }
+                else { x = vx; y = vy; w = vw; h = vh; }
+            }
+            else { x = vx; y = vy; w = vw; h = vh; }
+
             using var full = new Bitmap(vw, vh, PixelFormat.Format24bppRgb);
             using (var g = Graphics.FromImage(full))
             {
