@@ -13,6 +13,9 @@ internal static class InputService
     [DllImport("user32.dll", SetLastError = true)]
     private static extern uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);
 
+    [DllImport("user32.dll")]
+    private static extern uint MapVirtualKeyW(uint uCode, uint uMapType);
+
     [StructLayout(LayoutKind.Sequential)]
     private struct INPUT
     {
@@ -191,9 +194,60 @@ internal static class InputService
 
     private static void KeyDownVk(ushort vk) => SendVk(vk, 0);
     private static void KeyUpVk(ushort vk) => SendVk(vk, KEYEVENTF_KEYUP);
+
+    /// <summary>逐键发送（蓝牙键盘语义）：按下/抬起各发一次，由 PC 自己的输入法/应用处理。</summary>
+    internal static void KeyVk(byte vk, bool down) => SendVk(vk, down ? 0 : KEYEVENTF_KEYUP);
+
+    /// <summary>鼠标键逐次发送：0 左 / 1 右 / 2 中 / 3 后退 / 4 前进。</summary>
+    internal static void ButtonVk(byte btn, bool down)
+    {
+        switch (btn)
+        {
+            case 0: Mouse(0, 0, down ? LEFTDOWN : LEFTUP); break;
+            case 1: Mouse(0, 0, down ? RIGHTDOWN : RIGHTUP); break;
+            case 2: Mouse(0, 0, down ? MIDDLEDOWN : MIDDLEUP); break;
+            case 3: Mouse(0, 0, down ? XDOWN : XUP, XBUTTON1); break;
+            case 4: Mouse(0, 0, down ? XDOWN : XUP, XBUTTON2); break;
+        }
+    }
+
     private static void SendVk(ushort vk, uint flags)
     {
-        var extra = (vk is 0x25 or 0x26 or 0x27 or 0x28 or 0x21 or 0x22 or 0x23 or 0x24) ? EXTENDEDKEY : 0;
-        _ = SendInput(1, new[] { new INPUT { type = INPUT_KEYBOARD, U = new InputUnion { ki = new KEYBDINPUT { wVk = vk, dwFlags = flags | extra } } } }, INPUT.Size);
+        var extra = IsExtendedVk(vk) ? EXTENDEDKEY : 0;
+        // 同时带上扫描码：只认 scancode 的程序（游戏、部分输入法）才能收到正确按键
+        var scan = (ushort)MapVirtualKeyW(vk, 0);
+        _ = SendInput(1, new[] { new INPUT { type = INPUT_KEYBOARD, U = new InputUnion { ki = new KEYBDINPUT { wVk = vk, wScan = scan, dwFlags = flags | extra } } } }, INPUT.Size);
+    }
+
+    private static bool IsExtendedVk(ushort vk) => vk is 0x21 or 0x22 or 0x23 or 0x24 or 0x25 or 0x26 or 0x27 or 0x28
+        or 0x2C or 0x2D or 0x2E or 0x5B or 0x5C or 0x5D or 0x90 or 0xA3 or 0xA5;
+}
+
+/// <summary>单个手机连接的按键/按钮状态。连接断开或收到 R 指令时统一抬起，防止「卡键」。</summary>
+internal sealed class InputSession
+{
+    private readonly bool[] _keys = new bool[256];
+    private readonly bool[] _buttons = new bool[5];
+
+    public void Key(byte vk, bool down)
+    {
+        if (vk == 0) return;
+        _keys[vk] = down;
+        InputService.KeyVk(vk, down);
+    }
+
+    public void Button(byte btn, bool down)
+    {
+        if (btn >= _buttons.Length) return;
+        _buttons[btn] = down;
+        InputService.ButtonVk(btn, down);
+    }
+
+    public void ReleaseAll()
+    {
+        for (int i = 0; i < _keys.Length; i++)
+            if (_keys[i]) { _keys[i] = false; InputService.KeyVk((byte)i, false); }
+        for (int i = 0; i < _buttons.Length; i++)
+            if (_buttons[i]) { _buttons[i] = false; InputService.ButtonVk((byte)i, false); }
     }
 }
