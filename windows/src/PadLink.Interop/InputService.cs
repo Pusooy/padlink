@@ -74,7 +74,26 @@ internal static class InputService
         for (char c = '0'; c <= '9'; c++) VkMap[c.ToString()] = c;
     }
 
-    public static void MouseMove(double dx, double dy) => Mouse((int)dx, (int)dy, MOUSEEVENTF_MOVE);
+    // 亚像素余量：SendInput 只接受整数位移，(int) 直接截断会让慢速小位移永远变成 0。
+    // 这里把不足 1px 的部分留到下一次，累积到整像素再一起发出。
+    private static readonly object _moveLock = new();
+    private static double _remX, _remY;
+
+    public static void MouseMove(double dx, double dy)
+    {
+        if (!double.IsFinite(dx) || !double.IsFinite(dy)) return;
+        int ix, iy;
+        lock (_moveLock)
+        {
+            _remX += dx; _remY += dy;
+            ix = (int)Math.Truncate(_remX);
+            iy = (int)Math.Truncate(_remY);
+            _remX -= ix; _remY -= iy;
+        }
+        // 整数部分为 0 说明这一帧位移不足 1px：已存入余量，等后续累积
+        if (ix == 0 && iy == 0) return;
+        Mouse(ix, iy, MOUSEEVENTF_MOVE);
+    }
     public static void MouseClick(string btn, int count = 1)
     {
         for (int i = 0; i < count; i++) { MouseDown(btn); MouseUp(btn); }
@@ -95,11 +114,23 @@ internal static class InputService
             default: Mouse(0, 0, down ? LEFTDOWN : LEFTUP); break;
         }
     }
+    // 滚轮同样累积余量：客户端按帧合并后单帧位移可能不足一格，
+    // 直接截断会丢滚动量，而 old 的「不足一格补一格」会在每帧补发，产生过冲。
+    private static readonly object _scrollLock = new();
+    private static double _scrollRem;
+
     public static void Scroll(double dx, double dy)
     {
-        // dy>0 = 手指下滑 = 内容向下 = 滚轮向后（负值）
-        int wheel = -(int)(dy * WHEEL_DELTA / 100.0);
-        if (wheel == 0) wheel = dy > 0 ? -(int)WHEEL_DELTA : (int)WHEEL_DELTA;
+        if (!double.IsFinite(dy)) return;
+        int wheel;
+        lock (_scrollLock)
+        {
+            // dy>0 = 手指下滑 = 内容向下 = 滚轮向后（负值）
+            _scrollRem += -dy * WHEEL_DELTA / 100.0;
+            wheel = (int)_scrollRem;
+            if (wheel == 0) return;       // 不足一格：留到下次累积
+            _scrollRem -= wheel;
+        }
         SendMouse(new MOUSEINPUT { mouseData = (uint)wheel, dwFlags = WHEEL });
     }
 
