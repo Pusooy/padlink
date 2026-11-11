@@ -49,7 +49,25 @@ public partial class App : Application
 
         // ---- 主窗口 ----
         _window = new MainWindow(Settings);
-        if (!Settings.StartMinimized) _window.Activate();
+
+        // 启动策略：
+        //  - 带 --tray 参数（开机自启注册表写入的）→ 一律隐藏到托盘
+        //  - 否则按用户设置 StartMinimized 决定是否显示窗口
+        bool launchedForTray = Environment.GetCommandLineArgs()
+            .Any(a => a.Equals("--tray", StringComparison.OrdinalIgnoreCase));
+        bool showWindow = !launchedForTray && !Settings.StartMinimized;
+
+        if (showWindow)
+        {
+            _window.Activate();
+            Log.Info("启动：显示主窗口");
+        }
+        else
+        {
+            // 不激活窗口，仅常驻托盘 + 后台服务
+            _window.HideToTray();
+            Log.Info(launchedForTray ? "启动：开机自启，隐藏到托盘" : "启动：最小化到托盘");
+        }
 
         // ---- 托盘 ----
         _tray = new TrayIcon();
