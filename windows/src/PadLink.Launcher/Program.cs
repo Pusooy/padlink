@@ -46,6 +46,10 @@ internal static class Program
                 UseShellExecute = false,
                 WorkingDirectory = appDir,
             };
+            // 把 launcher 自身路径传给 UI，用于正确的开机自启注册
+            var selfPath = Environment.ProcessPath;
+            if (!string.IsNullOrEmpty(selfPath))
+                psi.Environment["PADLINK_LAUNCHER"] = selfPath;
             foreach (var a in args) psi.ArgumentList.Add(a);
             Process.Start(psi);
             return 0;
