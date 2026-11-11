@@ -2,6 +2,7 @@
 <resources>
     <!-- 使用系统 DeviceDefault：无任何第三方主题依赖，Android 8~17 全部可用 -->
     <style name="AppTheme" parent="@android:style/Theme.DeviceDefault.NoActionBar">
+        <item name="android:windowFullscreen">true</item>
         <item name="android:windowBackground">#0d0e12</item>
         <item name="android:windowNoTitle">true</item>
     </style>
