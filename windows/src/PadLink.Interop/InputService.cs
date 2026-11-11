@@ -1,4 +1,5 @@
 using PadLink.Core;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -77,26 +78,107 @@ internal static class InputService
         for (char c = '0'; c <= '9'; c++) VkMap[c.ToString()] = c;
     }
 
-    // 亚像素余量：SendInput 只接受整数位移，(int) 直接截断会让慢速小位移永远变成 0。
-    // 这里把不足 1px 的部分留到下一次，累积到整像素再一起发出。
-    private static readonly object _moveLock = new();
-    private static double _remX, _remY;
+    // ==== 移动注入泵：流畅度的关键 ====
+    // 客户端的移动事件到达服务端时常是「突发成批」的（网络抖动 / 输入栈批量投递），
+    // 逐事件 SendInput 会把一批位移在同一次刷屏里打完、随后停一拍 → 光标一顿一顿。
+    // 泵把突发位移摊到 ~3ms 的均匀节拍上（≈250Hz，与真实鼠标报告率同级）；
+    // 稀疏事件（距上次注入超过一个节拍）则立即直出，不附加任何延迟。
+    // 亚像素余量照旧累积，慢速拖动不丢像素。
+    private static readonly object _pumpLock = new();
+    private static double _pendX, _pendY;   // 待注入位移（像素，浮点累积）
+    private static double _remX, _remY;     // 亚像素余量
+    private static long _lastInject;        // 上次注入的 Stopwatch 时间戳
+    private static long _lastArrival;       // 上次事件到达时间（算实时手速用）
+    private static double _inRate;          // 实时手速 EWMA（px/ms，按主轴幅度）
+    private static Thread? _pump;
+    private static volatile bool _pumpRun;
+    private const int PumpPeriodMs = 2;
+
+    [DllImport("winmm.dll")]
+    private static extern uint timeBeginPeriod(uint ms);
 
     public static void MouseMove(double dx, double dy)
     {
         if (!double.IsFinite(dx) || !double.IsFinite(dy)) return;
-        int ix, iy;
-        lock (_moveLock)
+        lock (_pumpLock)
         {
-            _remX += dx; _remY += dy;
-            ix = (int)Math.Truncate(_remX);
-            iy = (int)Math.Truncate(_remY);
-            _remX -= ix; _remY -= iy;
+            var now = Stopwatch.GetTimestamp();
+            // 手速估计：dt 下限 4ms——网络把多个事件攒成一包时 dt≈0，
+            // 若不设下限会把突发误判成「超高速甩动」而一次性放行（正是卡顿的来源）
+            var dtMs = _lastArrival == 0
+                ? 4.0
+                : Math.Max((now - _lastArrival) * 1000.0 / Stopwatch.Frequency, 4.0);
+            _lastArrival = now;
+            var mag = Math.Max(Math.Abs(dx), Math.Abs(dy));
+            var inst = mag / dtMs;
+            _inRate = _inRate <= 0 ? inst : _inRate * 0.65 + inst * 0.35;
+            _pendX += dx; _pendY += dy;
         }
-        // 整数部分为 0 说明这一帧位移不足 1px：已存入余量，等后续累积
-        if (ix == 0 && iy == 0) return;
-        Mouse(ix, iy, MOUSEEVENTF_MOVE);
+        StartPump();
+        // 稀疏事件零延迟路径：距离上次注入已超过一个节拍，直接出
+        if ((Stopwatch.GetTimestamp() - Volatile.Read(ref _lastInject)) * 1000.0 / Stopwatch.Frequency >= PumpPeriodMs)
+            PumpTick();
     }
+
+    private static void StartPump()
+    {
+        if (_pump != null) return;
+        lock (_pumpLock)
+        {
+            if (_pump != null) return;
+            try { timeBeginPeriod(1); } catch { } // Sleep(3) 才真能睡 3ms（默认 15.6ms 粒度）
+            _pumpRun = true;
+            _pump = new Thread(PumpLoop)
+            {
+                IsBackground = true,
+                Priority = ThreadPriority.Highest,
+                Name = "PadLinkMousePump",
+            };
+            _pump.Start();
+        }
+    }
+
+    private static void PumpLoop()
+    {
+        while (_pumpRun)
+        {
+            Thread.Sleep(PumpPeriodMs);
+            PumpTick();
+        }
+    }
+
+    private static void PumpTick()
+    {
+        int ix, iy;
+        lock (_pumpLock)
+        {
+            var now = Stopwatch.GetTimestamp();
+            var dtMs = _lastInject == 0
+                ? PumpPeriodMs
+                : (now - _lastInject) * 1000.0 / Stopwatch.Frequency;
+            _lastInject = now;
+            if (_pendX == 0 && _pendY == 0) return;
+
+            // 每拍预算：按「实时手速 × 节拍时长」放行。
+            // 慢速拖动（0.04px/ms）→ 每拍 ~1px，突发被摊成均匀小步；
+            // 快速甩动（6px/ms）→ 每拍 ~25px，光标跟得上手，不拖尾。
+            var budget = Math.Clamp(_inRate * dtMs * 1.6 + 1.0, 1.0, 40.0);
+            var wantX = _pendX + _remX;
+            var wantY = _pendY + _remY;
+            var mag = Math.Max(Math.Abs(wantX), Math.Abs(wantY));
+            if (mag > budget)
+            {
+                var k = budget / mag;
+                wantX *= k; wantY *= k;
+            }
+            ix = (int)Math.Truncate(wantX);
+            iy = (int)Math.Truncate(wantY);
+            _remX = wantX - ix; _remY = wantY - iy;
+            _pendX -= wantX; _pendY -= wantY;
+        }
+        if (ix != 0 || iy != 0) Mouse(ix, iy, MOUSEEVENTF_MOVE);
+    }
+
     public static void MouseClick(string btn, int count = 1)
     {
         for (int i = 0; i < count; i++) { MouseDown(btn); MouseUp(btn); }
