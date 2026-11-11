@@ -9,6 +9,21 @@ public static class StartupRegistration
     private const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
     private const string ValueName = "PadLink";
 
+    /// <summary>
+    /// 解析用于自启的可执行路径。
+    /// launcher 场景下 Environment.ProcessPath 指向解压目录里的 PadLink.UI.exe，
+    /// 但自启必须指向用户手上的单文件 PadLink.exe（launcher 通过环境变量告知）。
+    /// </summary>
+    private static string ResolveLauncherPath()
+    {
+        var fromEnv = Environment.GetEnvironmentVariable("PADLINK_LAUNCHER");
+        if (!string.IsNullOrWhiteSpace(fromEnv) && File.Exists(fromEnv))
+            return fromEnv;
+
+        // 非 launcher 场景（直接运行 PadLink.UI.exe）：用它自己
+        return Environment.ProcessPath ?? "";
+    }
+
     public static bool IsEnabled()
     {
         try
@@ -26,7 +41,7 @@ public static class StartupRegistration
             using var key = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(RunKey);
             if (enable)
             {
-                var exe = Environment.ProcessPath ?? "";
+                var exe = ResolveLauncherPath();
                 key.SetValue(ValueName, $"\"{exe}\" --tray");
                 Log.Info($"已启用自启：{exe}");
             }
