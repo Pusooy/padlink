@@ -278,6 +278,24 @@ public static class WebSocketHandler
                     if (FileService.Delete(GetS(e, "path", "")))
                         Log.Info("已删除文件");
                     break;
+                case "audio_start":
+                    AudioPlaybackService.Start(GetI(e, "sampleRate", 16000));
+                    break;
+                case "audio_stop":
+                    AudioPlaybackService.Stop();
+                    break;
+                case "audio_data":
+                    // base64 PCM 数据解码并播放
+                    var b64 = GetS(e, "pcm", "");
+                    if (b64.Length > 0)
+                    {
+                        var bytes = Convert.FromBase64String(b64);
+                        AudioPlaybackService.WritePcm(bytes);
+                    }
+                    break;
+                case "set_monitor":
+                    ScreenService.SetActiveMonitor(GetI(e, "index", -1));
+                    break;
                 case "power":
                     PowerService.Perform(GetS(e, "action", ""));
                     break;
