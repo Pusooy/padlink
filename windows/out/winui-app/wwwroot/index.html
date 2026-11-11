@@ -70,11 +70,22 @@ svg.lucide{width:20px;height:20px;stroke-width:2.1}
 #quickCol button:active{transform:scale(.9);background:var(--accentSoft);color:var(--accent);border-color:var(--accent)}
 
 /* 键盘页 */
+#kbBar{display:flex;gap:8px;flex-shrink:0;align-items:stretch}
+#kbDisplay{flex:1;min-height:46px;max-height:96px;overflow-y:auto;padding:11px 14px;
+ border-radius:12px;border:1px solid var(--line);background:var(--surface);
+ font-size:15.5px;line-height:1.45;color:var(--text);word-break:break-all;
+ -webkit-user-select:none;user-select:none;cursor:default}
+#kbDisplay.empty #kbPh{display:inline}
+#kbPh{display:none;color:var(--text3)}
+#kbCaret{color:var(--accent);animation:kblink 1.1s step-end infinite;margin-left:1px}
+@keyframes kblink{0%,50%{opacity:1}50.1%,100%{opacity:0}}
+#voiceBtn{width:46px;flex-shrink:0;border-radius:12px;border:1px solid var(--line);
+ background:var(--surface);color:var(--text2);display:flex;align-items:center;
+ justify-content:center;transition:.15s}
+#voiceBtn:active{background:var(--accentSoft);border-color:var(--accent);color:var(--accent)}
+#voiceBtn.listening{background:var(--accentSoft);border-color:var(--accent);color:var(--accent);
+ box-shadow:0 0 0 3px var(--accentSoft)}
 #kbPage{gap:8px;padding-top:6px}
-#kbInput{width:100%;padding:11px 14px;font-size:15.5px;border-radius:12px;border:1px solid var(--line);
- background:var(--surface);color:var(--text);outline:none;transition:border-color .15s;flex-shrink:0}
-#kbInput:focus{border-color:var(--accent)}
-#kbInput::placeholder{color:var(--text3)}
 #kbGrid{flex:1;display:flex;flex-direction:column;gap:5px;min-height:0;overflow:hidden}
 .krow{display:flex;gap:5px;flex:1;min-height:0}
 .key{flex:1;border-radius:9px;background:var(--surface);border:1px solid var(--line);
@@ -313,14 +324,14 @@ svg.lucide{width:20px;height:20px;stroke-width:2.1}
       </div>
     </section>
 
-    <!-- 键盘 -->
+    <!-- 键盘（纯虚拟键盘，不唤起系统输入法） -->
     <section class="page" id="kbPage">
-      <div style="display:flex;gap:8px;flex-shrink:0">
-      <input id="kbInput" style="flex:1" placeholder="输入文字或使用下方键盘（支持中文）"
-             autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
-      <button id="voiceBtn" title="语音输入" style="width:46px;flex-shrink:0;border-radius:12px;
-       border:1px solid var(--line);background:var(--surface);color:var(--text2);display:flex;
-       align-items:center;justify-content:center"><i data-lucide="mic"></i></button>
+      <div id="kbBar">
+        <div id="kbDisplay">
+          <span id="kbText"></span><span id="kbCaret">|</span>
+          <span id="kbPh">点下方按键输入 · 中文用右侧语音</span>
+        </div>
+        <button id="voiceBtn" title="语音输入中文"><i data-lucide="mic"></i></button>
       </div>
       <div id="kbGrid"></div>
     </section>
@@ -595,10 +606,61 @@ function setStatus(){
 }
 function send(o){ if(connected&&ws&&ws.readyState===1) try{ws.send(JSON.stringify(o))}catch(e){} }
 
+/* ========= 高频位移：rAF 合并 + 紧凑文本协议 =========
+   touchmove 只累积位移，每帧最多发一条 "M<dx>,<dy>" / "S<dx>,<dy>"。
+   好处：消息数从 60-120Hz 降到刷新率（60Hz），单条从 ~40B JSON 降到 ~10B。
+   背压：bufferedAmount 超阈值时本帧不发，位移留在缓冲区里合并到下一帧并限幅——
+   丢的是「拆分的中间帧」而不是位移本身，既不会越拖越卡，也不会一停手就少走一截。
+*/
+var MOVE_BACKPRESSURE=4096,MOVE_MAX_CATCHUP=120;
+var moveBuf={dx:0,dy:0},movePending=false;
+var scrollBuf={dx:0,dy:0},scrollPending=false;
+function wsReady(){return connected&&ws&&ws.readyState===1}
+function queueMove(dx,dy){
+  moveBuf.dx+=dx;moveBuf.dy+=dy;
+  if(!movePending){movePending=true;requestAnimationFrame(flushMove)}
+}
+function flushMove(){
+  movePending=false;
+  if(!moveBuf.dx&&!moveBuf.dy) return;
+  if(!wsReady()){moveBuf.dx=0;moveBuf.dy=0;return}
+  if(ws.bufferedAmount>MOVE_BACKPRESSURE){
+    // 积压过多：限幅后留到下一帧合并重发（避免之后一次性大跳）
+    moveBuf.dx=Math.max(-MOVE_MAX_CATCHUP,Math.min(MOVE_MAX_CATCHUP,moveBuf.dx));
+    moveBuf.dy=Math.max(-MOVE_MAX_CATCHUP,Math.min(MOVE_MAX_CATCHUP,moveBuf.dy));
+    movePending=true;requestAnimationFrame(flushMove);
+    return;
+  }
+  var dx=moveBuf.dx,dy=moveBuf.dy;
+  moveBuf.dx=0;moveBuf.dy=0;
+  try{ws.send("M"+dx.toFixed(2)+","+dy.toFixed(2))}catch(e){}
+}
+function queueScroll(dx,dy){
+  scrollBuf.dx+=dx;scrollBuf.dy+=dy;
+  if(!scrollPending){scrollPending=true;requestAnimationFrame(flushScroll)}
+}
+function flushScroll(){
+  scrollPending=false;
+  if(!scrollBuf.dx&&!scrollBuf.dy) return;
+  if(!wsReady()){scrollBuf.dx=0;scrollBuf.dy=0;return}
+  if(ws.bufferedAmount>MOVE_BACKPRESSURE){
+    scrollBuf.dx=Math.max(-MOVE_MAX_CATCHUP,Math.min(MOVE_MAX_CATCHUP,scrollBuf.dx));
+    scrollBuf.dy=Math.max(-MOVE_MAX_CATCHUP,Math.min(MOVE_MAX_CATCHUP,scrollBuf.dy));
+    scrollPending=true;requestAnimationFrame(flushScroll);
+    return;
+  }
+  var dx=scrollBuf.dx,dy=scrollBuf.dy;
+  scrollBuf.dx=0;scrollBuf.dy=0;
+  try{ws.send("S"+dx.toFixed(2)+","+dy.toFixed(2))}catch(e){}
+}
+
 function connect(h){
   h=(h||"").trim(); if(!h) return;
   try{ws&&ws.close()}catch(e){}
   clearInterval(pingTimer);clearTimeout(reconnectTimer);
+  // 丢弃上个连接遗留的位移，避免连上新连接后光标突然跳一下
+  moveBuf.dx=0;moveBuf.dy=0;movePending=false;
+  scrollBuf.dx=0;scrollBuf.dy=0;scrollPending=false;
   $("statusText").textContent="正在连接 "+h+" …"; $("dot").className="";
   ws=new WebSocket("ws://"+h+":"+PORT+"/ws");
   var opened=false;
@@ -706,7 +768,7 @@ document.querySelectorAll(".dockBtn").forEach(function(b){
     document.querySelectorAll(".page").forEach(function(p){p.classList.toggle("active",p.id===page)});
     buzz("page");
     if(page==="appsPage"){loadWindows();loadApps()}
-    if(page==="kbPage") setTimeout(function(){$("kbInput").focus()},140);
+    if(page==="kbPage") kbRender();
     if(page==="mediaPage"){ send({t:"get_volume"}); send({t:"get_sysinfo"}); }
     if(page==="screenPage") loadScreen();
     if(page==="filesPage") loadFiles(fileCwd);
@@ -760,8 +822,10 @@ pad.addEventListener("touchmove",function(e){
     if(!st) return;
     if(Math.abs(t.clientX-st.sx)>TAP_DIST||Math.abs(t.clientY-st.sy)>TAP_DIST) st.moved=true;
     if(padLast){
+      // 累积到 rAF 缓冲区，不再每条 touchmove 都发一条 WS 消息
+      // 不做 >0.4 阈值：亚像素位移必须保留，否则慢速拖动会整段丢失
       var dx=(t.clientX-padLast.x)*sens,dy=(t.clientY-padLast.y)*sens;
-      if(Math.abs(dx)>0.4||Math.abs(dy)>0.4) send({t:"move",dx:dx,dy:dy});
+      if(dx||dy) queueMove(dx,dy);
       padLast={x:t.clientX,y:t.clientY};
     }
   }else if(ids.length>=2){
@@ -771,7 +835,7 @@ pad.addEventListener("touchmove",function(e){
       var s2=touches[t2.identifier];if(!s2) continue;
       s2.moved=true;
       var dy2=(t2.clientY-s2.y)*scrollSpd;
-      if(Math.abs(dy2)>0.4) send({t:"scroll",dx:0,dy:dy2});
+      if(dy2) queueScroll(0,dy2);
       scrollAccum+=Math.abs(dy2);
       if(scrollAccum>28){buzz("wheel");scrollAccum=0}
       s2.x=t2.clientX;s2.y=t2.clientY;
@@ -780,6 +844,8 @@ pad.addEventListener("touchmove",function(e){
 },{passive:false});
 pad.addEventListener("touchend",function(e){
   e.preventDefault();
+  // 抬手前先把未发出的位移落地：保证「移动→点击」在服务端顺序正确，也避免最后一小段位移丢失
+  flushMove();flushScroll();
   var ids=Object.keys(touches),now=Date.now();
   if(ids.length===2){
     var allTap=ids.every(function(k){var s=touches[k];return s&&!s.moved&&now-s.st<TAP_MS});
@@ -795,6 +861,7 @@ pad.addEventListener("touchend",function(e){
   if(Object.keys(touches).length===0){padLast=null;scrollRef=null;hintBack()}
 },{passive:false});
 pad.addEventListener("touchcancel",function(e){
+  flushMove();flushScroll();
   for(var i=0;i<e.changedTouches.length;i++) delete touches[e.changedTouches[i].identifier];
   if(Object.keys(touches).length===0){padLast=null;scrollRef=null;hintBack()}
 });
@@ -814,61 +881,62 @@ var ROWS=[
 var mods=[],shiftOn=false,capsOn=false;
 var MODKEYS=["ctrl","win","alt","shift","caps_lock","tab","enter","backspace","esc"];
 function escHtml(s){return s.replace(/&/g,"&amp;").replace(/</g,"&lt;")}
-(function buildKbd(){
-  var grid=$("kbGrid");
-  ROWS.forEach(function(row,ri){
-    var div=document.createElement("div");div.className="krow";
-    row.forEach(function(k,ki){
-      var b=document.createElement("button");
-      var cls="key"+(k[2]?" "+k[2]:"")+(MODKEYS.indexOf(k[1])>=0?" alt":"");
-      b.className=cls;b.dataset.ri=ri;b.dataset.ki=ki;
-      if(k[0]&&k[1]&&k[0]!==k[1]&&k[1].length===1) b.innerHTML="<small>"+escHtml(k[0])+"</small>"+escHtml(k[1]);
-      else b.textContent=k[0]||k[1];
-      b.addEventListener("click",function(){keyPress(ri,ki)});
-      div.appendChild(b);
-    });
-    grid.appendChild(div);
-  });
-})();
-function keyPress(ri,ki){
-  var k=ROWS[ri][ki],name=k[1];buzz("tap");
-  if(name==="shift"){shiftOn=!shiftOn;syncMods();return}
-  if(name==="caps_lock"){capsOn=!capsOn;syncMods();return}
-  if(["ctrl","win","alt"].indexOf(name)>=0){
-    if(mods.indexOf(name)>=0) mods=mods.filter(function(m){return m!==name});
-    else mods.push(name);
-    syncMods();return;
-  }
-  var ch=name;
-  if(ch.length===1){ if(/[a-z]/.test(ch)) ch=(shiftOn!==capsOn)?ch.toUpperCase():ch; else if(shiftOn) ch=k[0]; }
-  if(mods.length) send({t:"key",value:mods.join("+")+"+"+ch});
-  else send({t:"key",value:ch});
-  if(shiftOn){shiftOn=false;syncMods()}
-  if(mods.length){mods=[];syncMods()}
-}
-function syncMods(){
-  document.querySelectorAll("#kbGrid .key").forEach(function(b){
-    var ri=+b.dataset.ri,ki=+b.dataset.ki,name=ROWS[ri][ki][1];
-    b.classList.remove("on");
-    if(name==="shift"&&shiftOn) b.classList.add("on");
-    if(name==="caps_lock"&&capsOn) b.classList.add("on");
-    if(mods.indexOf(name)>=0) b.classList.add("on");
-  });
-}
-var composing=false,flushTimer=null,kbInput=$("kbInput");
-function flushBuffer(){
-  clearTimeout(flushTimer);flushTimer=null;
-  var v=kbInput.value;
-  if(v){send({t:"text",value:v});kbInput.value=""}
-}
-kbInput.addEventListener("compositionstart",function(){composing=true;clearTimeout(flushTimer)});
-kbInput.addEventListener("compositionend",function(){
-  composing=false;clearTimeout(flushTimer);flushTimer=setTimeout(flushBuffer,120)});
-kbInput.addEventListener("input",function(){
-  if(composing) return;clearTimeout(flushTimer);flushTimer=setTimeout(flushBuffer,300)});
-kbInput.addEventListener("keydown",function(e){
-  if(e.key==="Enter"&&!composing){flushBuffer();send({t:"key",value:"return"});e.preventDefault()}});
+/* ========= 键盘：自建缓冲，不唤起系统输入法 ========= */
+var kbBuf = "";          // 待发送文本
+var kbFlushTimer = null;
+var kbDisplay = $("kbDisplay");
+var kbTextEl = $("kbText");
 
+function kbRender(){
+  kbTextEl.textContent = kbBuf;
+  kbDisplay.classList.toggle("empty", kbBuf.length === 0);
+  kbDisplay.scrollTop = kbDisplay.scrollHeight;
+}
+
+function kbScheduleFlush(){
+  clearTimeout(kbFlushTimer);
+  // 停顿 260ms 后整段发出并清空，保证电脑端字序正确且不闪烁
+  kbFlushTimer = setTimeout(kbFlush, 260);
+}
+
+function kbFlush(){
+  clearTimeout(kbFlushTimer); kbFlushTimer = null;
+  if (!kbBuf) return;
+  send({ t: "text", value: kbBuf });
+  kbBuf = "";
+  kbRender();
+}
+
+function kbAppend(ch){
+  kbBuf += ch;
+  kbRender();
+  kbScheduleFlush();
+}
+
+function kbBackspace(){
+  if (kbBuf.length > 0){
+    // 按码点删除，正确处理中文/emoji
+    kbBuf = Array.from(kbBuf).slice(0, -1).join("");
+    kbRender();
+    kbScheduleFlush();
+  } else {
+    // 缓冲已空 -> 直接给电脑发一个退格
+    send({ t: "key", value: "backspace" });
+  }
+}
+
+// 点击显示区可清空（长按也行，简单起见单击清空全部）
+kbDisplay.addEventListener("click", function(){
+  if (!kbBuf) return;
+  var n = Array.from(kbBuf).length;
+  kbBuf = "";
+  kbRender();
+  // 让电脑端也删掉已发出的这些字符（已 flush 的部分在电脑上）
+  if (n > 0) { /* 已在电脑上的内容不追删，用户可再按退格 */ }
+  buzz("tap");
+});
+
+/* 语音输入：识别结果追加到缓冲 */
 /* ========= 媒体/音量 ========= */
 document.querySelectorAll("[data-key]").forEach(function(b){
   b.addEventListener("click",function(){send({t:"key",value:b.dataset.key});buzz("left")});
@@ -1141,6 +1209,72 @@ function renderSysInfo(info){
 
 
 
+
+(function buildKbd(){
+  var grid=$("kbGrid");
+  ROWS.forEach(function(row,ri){
+    var div=document.createElement("div");div.className="krow";
+    row.forEach(function(k,ki){
+      var b=document.createElement("button");
+      var cls="key"+(k[2]?" "+k[2]:"")+(MODKEYS.indexOf(k[1])>=0?" alt":"");
+      b.className=cls;b.dataset.ri=ri;b.dataset.ki=ki;
+      if(k[0]&&k[1]&&k[0]!==k[1]&&k[1].length===1) b.innerHTML="<small>"+escHtml(k[0])+"</small>"+escHtml(k[1]);
+      else b.textContent=k[0]||k[1];
+      b.addEventListener("click",function(){keyPress(ri,ki)});
+      div.appendChild(b);
+    });
+    grid.appendChild(div);
+  });
+})();
+function keyPress(ri,ki){
+  var k = ROWS[ri] && ROWS[ri][ki];
+  if (!k) return;
+  // 单字母键形如 ["z"]，双值键形如 ["<", ","] 或 ["⌫","backspace"]
+  var name = (k.length > 1 && k[1] != null) ? k[1] : k[0];
+  var label = k[0];
+  buzz("tap");
+  if(name==="shift"){shiftOn=!shiftOn;syncMods();return}
+  if(name==="caps_lock"){capsOn=!capsOn;syncMods();return}
+  if(name==="enter"){ kbFlush(); send({t:"key",value:"return"}); return; }
+  if(name==="space"){ kbAppend(" "); return; }
+  if(["ctrl","win","alt"].indexOf(name)>=0){
+    if(mods.indexOf(name)>=0) mods=mods.filter(function(m){return m!==name});
+    else mods.push(name);
+    syncMods();return;
+  }
+  // 退格：优先删本地缓冲，缓冲空才发到电脑
+  if(name==="backspace"){ kbBackspace(); if(shiftOn){shiftOn=false;syncMods()} return; }
+
+  var ch = name;
+  if (ch.length === 1) {
+    if (/[a-z]/.test(ch)) {
+      // 字母：shift 与 caps 异或决定大小写
+      ch = (shiftOn !== capsOn) ? ch.toUpperCase() : ch;
+    } else if (shiftOn && k.length > 1) {
+      // 符号键：shift 时取上档字符（k[0]）
+      ch = k[0];
+    }
+  }
+  if(mods.length){
+    // 组合键立即发送（Ctrl+C 之类不该缓冲）
+    send({t:"key",value:mods.join("+")+"+"+ch});
+  } else if(ch.length===1){
+    kbAppend(ch);              // 普通字符进缓冲，显示在输入区
+  } else {
+    send({t:"key",value:ch});  // 特殊键（enter/esc/方向键）立即发送
+  }
+  if(shiftOn){shiftOn=false;syncMods()}
+  if(mods.length){mods=[];syncMods()}
+}
+function syncMods(){
+  document.querySelectorAll("#kbGrid .key").forEach(function(b){
+    var ri=+b.dataset.ri,ki=+b.dataset.ki,name=ROWS[ri][ki][1];
+    b.classList.remove("on");
+    if(name==="shift"&&shiftOn) b.classList.add("on");
+    if(name==="caps_lock"&&capsOn) b.classList.add("on");
+    if(mods.indexOf(name)>=0) b.classList.add("on");
+  });
+}
 /* ========= 语音输入（Web Speech API） ========= */
 var recog = null, listening = false;
 $("voiceBtn").addEventListener("click", function () {
@@ -1150,6 +1284,7 @@ $("voiceBtn").addEventListener("click", function () {
     listening = false;
     try { recog.stop(); } catch (e) {}
     this.style.color = ""; this.style.borderColor = "";
+    this.classList.remove("listening");
     buzz("tap");
     return;
   }
@@ -1162,7 +1297,12 @@ $("voiceBtn").addEventListener("click", function () {
     for (var i = ev.resultIndex; i < ev.results.length; i++) {
       if (ev.results[i].isFinal) txt += ev.results[i][0].transcript;
     }
-    if (txt) { send({ t: "text", value: txt }); buzz("left"); toast("已输入：" + txt); }
+    if (txt) {
+      // 语音结果直接发给电脑（中文不经手机输入法）
+      send({ t: "text", value: txt });
+      buzz("left");
+      toast("已输入：" + txt);
+    }
   };
   recog.onerror = function (e) { toast("语音识别错误：" + e.error); };
   recog.onend = function () {
@@ -1173,6 +1313,7 @@ $("voiceBtn").addEventListener("click", function () {
     listening = true;
     this.style.color = "var(--accent)";
     this.style.borderColor = "var(--accent)";
+    this.classList.add("listening");
     buzz("page");
     toast("正在听…再次点击停止");
   } catch (e) { toast("启动失败：" + e.message); }
