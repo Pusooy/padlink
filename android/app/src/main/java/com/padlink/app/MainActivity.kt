@@ -2,7 +2,6 @@ package com.padlink.app
 
 import android.annotation.SuppressLint
 import android.content.Context
-import android.content.pm.ActivityInfo
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Color
@@ -23,8 +22,6 @@ import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
-import android.view.WindowInsets
-import android.view.WindowInsetsController
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.ImageView
@@ -127,9 +124,8 @@ class MainActivity : android.app.Activity() {
             @Suppress("DEPRECATION") (getSystemService(VIBRATOR_SERVICE) as Vibrator)
         }
 
-        setupEdgeToEdge()
-        hideSystemBars()
-        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        // 方向由 AndroidManifest 的 screenOrientation 声明，运行时不再设置
+        // （部分 ROM 在 API 36+ 上对运行时设置方向会抛异常）
         loadPrefs()
         try {
             buildUi()
@@ -141,7 +137,6 @@ class MainActivity : android.app.Activity() {
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
-        if (hasFocus) hideSystemBars()
     }
 
     override fun onDestroy() {
@@ -190,19 +185,7 @@ class MainActivity : android.app.Activity() {
         }
     }
 
-    private fun hideSystemBars() {
-        if (Build.VERSION.SDK_INT >= 30) {
-            window.insetsController?.let {
-                it.hide(WindowInsets.Type.systemBars())
-                it.systemBarsBehavior = WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-            }
-        } else {
-            @Suppress("DEPRECATION")
-            window.decorView.systemUiVisibility =
-                View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
-                View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-        }
-    }
+    private fun hideSystemBars() { /* 已禁用 */ }
 
     // ============ 仿生震动 ============
     private fun buzz(kind: String) {
@@ -330,8 +313,7 @@ class MainActivity : android.app.Activity() {
             background = bg(C_ACCENT, 13f)
             setPadding(0, dp(14), 0, dp(14))
             setOnClickListener {
-                hideSystemBars()
-                buzz("page")
+                        buzz("page")
                 connect(hostInput.text.toString().trim())
             }
         }
