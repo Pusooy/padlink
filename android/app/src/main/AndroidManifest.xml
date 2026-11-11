@@ -5,7 +5,6 @@
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
-    <!-- 16KB page size 兼容（Android 15+ 要求，纯 Kotlin 无 native 库也显式声明） -->
     <application
         android:label="PadLink"
         android:icon="@mipmap/ic_launcher"
@@ -13,18 +12,15 @@
         android:theme="@style/AppTheme"
         android:allowBackup="true"
         android:supportsRtl="true"
-        android:enableOnBackInvokedCallback="true"
         android:hardwareAccelerated="true"
-        android:usesCleartextTraffic="true"
-        android:extractNativeLibs="true">
+        android:usesCleartextTraffic="true">
 
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:screenOrientation="fullSensor"
-            android:resizeableActivity="true"
-            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden|density|uiMode"
-            android:launchMode="singleTop">
+            android:theme="@style/AppTheme"
+            android:label="PadLink"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden|density|uiMode|navigation">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
