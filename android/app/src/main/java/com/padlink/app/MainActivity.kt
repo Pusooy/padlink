@@ -52,7 +52,7 @@ import kotlin.math.max
  * 全屏触控板为主体，底部 Dock 五页签（触控板 / 键盘 / 媒体 / 应用 / 设置）。
  * 震动通过 VibrationEffect 做振幅级精细调制（仿生手感）。
  */
-class MainActivity : androidx.appcompat.app.AppCompatActivity() {
+class MainActivity : android.app.Activity() {
 
     private val C_BG = Color.parseColor("#0d0e12")
     private val C_SURFACE = Color.parseColor("#15171d")
@@ -108,20 +108,12 @@ class MainActivity : androidx.appcompat.app.AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // Android 16/17 对窗口 API 更严格：先设置主题再建视图，避免 Theme 应用失败导致白屏
-        try { setTheme(R.style.AppTheme) } catch (_: Throwable) { }
+        try { setTheme(android.R.style.Theme_DeviceDefault_NoActionBar) } catch (_: Throwable) { }
 
-        // 兜底：任何初始化异常都弹窗提示而不是闪退
-        Thread.setDefaultUncaughtExceptionHandler { _, ex ->
-            try {
-                android.util.Log.e("PadLink", "未捕获异常", ex)
-                runOnUiThread {
-                    android.app.AlertDialog.Builder(this)
-                        .setTitle("PadLink 启动异常")
-                        .setMessage(ex.stackTraceToString().take(1200))
-                        .setPositiveButton("确定", null)
-                        .show()
-                }
-            } catch (_: Throwable) { }
+        // 兜底：记录完整堆栈（可通过 adb logcat -s PadLink 查看）
+        Thread.setDefaultUncaughtExceptionHandler { thread, ex ->
+            android.util.Log.e("PadLink", "未捕获异常 @ ${thread.name}", ex)
+            try { showFatalError(ex) } catch (_: Throwable) { }
         }
 
         vibrator = try {
@@ -139,7 +131,12 @@ class MainActivity : androidx.appcompat.app.AppCompatActivity() {
         hideSystemBars()
         requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
         loadPrefs()
-        buildUi()
+        try {
+            buildUi()
+        } catch (fatal: Throwable) {
+            android.util.Log.e("PadLink", "buildUi 失败", fatal)
+            showFatalError(fatal)
+        }
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -160,6 +157,37 @@ class MainActivity : androidx.appcompat.app.AppCompatActivity() {
                 window.setDecorFitsSystemWindows(false)
             }
         } catch (_: Throwable) { }
+    }
+
+    /**
+     * 最后的兜底：任何 UI 构建失败都以可读文本展示，绝不让进程闪退。
+     * 用户可长按复制堆栈反馈。
+     */
+    private fun showFatalError(t: Throwable) {
+        try {
+            val detail = buildString {
+                appendLine("PadLink 启动失败")
+                appendLine("设备: ${Build.MANUFACTURER} ${Build.MODEL}")
+                appendLine("Android: ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})")
+                appendLine()
+                appendLine(t.toString())
+                appendLine()
+                t.stackTrace.take(24).forEach { appendLine(it.toString()) }
+            }
+            val tv = TextView(this).apply {
+                text = detail
+                textSize = 11f
+                setTextColor(android.graphics.Color.WHITE)
+                setBackgroundColor(android.graphics.Color.parseColor("#0d0e12"))
+                setPadding(32, 32, 32, 32)
+                typeface = Typeface.MONOSPACE
+                setTextIsSelectable(true)
+            }
+            val sv = ScrollView(this).apply { addView(tv) }
+            setContentView(sv)
+        } catch (_: Throwable) {
+            // 连错误界面都建不出来，只能静默
+        }
     }
 
     private fun hideSystemBars() {
