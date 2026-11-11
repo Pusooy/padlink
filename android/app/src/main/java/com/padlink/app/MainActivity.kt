@@ -405,28 +405,39 @@ class MainActivity : android.app.Activity() {
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         }
 
-        // Dock
+        // Dock（Material 矢量图标 + Fluent 间距）
         val dock = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
             setBackgroundColor(C_SURFACE)
-            setPadding(dp(6), dp(4), dp(6), dp(4))
+            setPadding(dp(4), dp(6), dp(4), dp(6))
         }
-        val labels = listOf("pad" to "触控板", "kb" to "键盘", "media" to "媒体",
-                            "apps" to "应用", "screen" to "屏幕", "files" to "文件",
-                            "settings" to "设置")
-        val glyphs = mapOf("pad" to "◉", "kb" to "⌨", "media" to "▶",
-                           "apps" to "▦", "screen" to "▣", "files" to "▤",
-                           "settings" to "⚙")
-        dockButtons = labels.map { (key, label) ->
+        val dockItems = listOf(
+            Triple("pad", "触控板", R.drawable.ic_touchpad),
+            Triple("kb", "键盘", R.drawable.ic_keyboard),
+            Triple("media", "媒体", R.drawable.ic_media),
+            Triple("apps", "应用", R.drawable.ic_apps),
+            Triple("screen", "屏幕", R.drawable.ic_screen),
+            Triple("files", "文件", R.drawable.ic_files),
+            Triple("settings", "设置", R.drawable.ic_settings),
+        )
+        dockButtons = dockItems.map { (key, label, iconRes) ->
             LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
                 gravity = Gravity.CENTER
-                setPadding(0, dp(7), 0, dp(7))
+                setPadding(0, dp(6), 0, dp(6))
                 layoutParams = LinearLayout.LayoutParams(0,
                     ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
-                addView(tv(glyphs[key] ?: "", 19f, C_TEXT3))
-                addView(tv(label, 10f, C_TEXT3))
-                setOnClickListener { selectDock(key) }
+                // 矢量图标
+                val iv = ImageView(this@MainActivity).apply {
+                    setImageResource(iconRes)
+                    layoutParams = LinearLayout.LayoutParams(dp(20), dp(20))
+                    imageTintList = android.content.res.ColorStateList.valueOf(C_TEXT3)
+                }
+                addView(iv)
+                // 标签
+                addView(tv(label, 9.5f, C_TEXT3))
+                setOnClickListener { selectDock(key); buzz("page") }
             }
         }
         dockButtons.forEach { dock.addView(it) }
@@ -450,9 +461,12 @@ class MainActivity : android.app.Activity() {
     private fun selectDockQuiet(key: String) {
         dockButtons.forEachIndexed { i, b ->
             val on = pageKeys[i] == key
-            (b.getChildAt(0) as TextView).setTextColor(if (on) C_ACCENT else C_TEXT3)
-            (b.getChildAt(1) as TextView).setTextColor(if (on) C_ACCENT else C_TEXT3)
-            b.background = if (on) bg(Color.parseColor("#4c86ff24"), 12f) else null
+            val iv = b.getChildAt(0) as ImageView
+            val lb = b.getChildAt(1) as TextView
+            val color = if (on) C_ACCENT else C_TEXT3
+            iv.imageTintList = android.content.res.ColorStateList.valueOf(color)
+            lb.setTextColor(color)
+            b.background = if (on) bg(Color.parseColor("#4c86ff20"), 12f) else null
         }
     }
 
@@ -1288,6 +1302,19 @@ class MainActivity : android.app.Activity() {
         if (!connected) return
         try { ws?.send(o.toString()) } catch (_: Exception) {}
     }
+    private fun sendMove(dx: Double, dy: Double) {
+        if (!connected) return
+        try { ws?.send("M$dx,$dy") } catch (_: Exception) {}
+    }
+    private fun sendScroll(dy: Double) {
+        if (!connected) return
+        try { ws?.send("S0,$dy") } catch (_: Exception) {}
+    }
+    private fun sendClick(btn: String) = sendJson(JSONObject().put("t", "click").put("btn", btn))
+    private fun sendDown(btn: String) = sendJson(JSONObject().put("t", "down").put("btn", btn))
+    private fun sendUp(btn: String) = sendJson(JSONObject().put("t", "up").put("btn", btn))
+    private fun sendText(v: String) = sendJson(JSONObject().put("t", "text").put("value", v))
+
 
     private fun sendKey(name: String) =
         sendJson(JSONObject().put("t", "key").put("value", name))
@@ -1303,6 +1330,31 @@ class MainActivity : android.app.Activity() {
         private var scrollAcc = 0f
         private val tapMs = 250L
         private val tapDist = 10f
+
+        // 帧批量合并：多帧 touchmove 合并为一条消息，消除高频网络压力
+        private var pendingDx = 0.0
+        private var pendingDy = 0.0
+        private var scrollDy = 0.0
+        private var framePending = false
+        private val frameCallback = android.view.Choreographer.FrameCallback {
+            framePending = false
+            if (abs(pendingDx) > 0.05 || abs(pendingDy) > 0.05) {
+                sendMove(pendingDx, pendingDy)
+                pendingDx = 0.0; pendingDy = 0.0
+            }
+            if (abs(scrollDy) > 0.05) {
+                sendScroll(scrollDy)
+                scrollDy = 0.0
+            }
+        }
+
+        private fun queueFrame(dx: Double, dy: Double, scrolly: Double = 0.0) {
+            pendingDx += dx; pendingDy += dy; scrollDy += scrolly
+            if (!framePending) {
+                framePending = true
+                android.view.Choreographer.getInstance().postFrameCallback(frameCallback)
+            }
+        }
 
         @SuppressLint("ClickableViewAccessibility")
         override fun onTouchEvent(e: MotionEvent): Boolean {
