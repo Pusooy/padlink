@@ -85,6 +85,7 @@ class MainActivity : android.app.Activity() {
     private lateinit var statusText: TextView
     private lateinit var pageHost: FrameLayout
     private lateinit var hostInput: EditText
+    private lateinit var scanStatus: TextView
     private lateinit var hintView: TextView
     private lateinit var padView: TouchpadView
     private lateinit var kbInput: EditText
@@ -319,6 +320,52 @@ class MainActivity : android.app.Activity() {
         }
         connectPage.addView(connectBtn, LinearLayout.LayoutParams(dp(320),
             ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(14) })
+
+        // 局域网扫描
+        val scanBtn = tv("◎  扫描局域网", 13f, C_ACCENT).apply {
+            gravity = Gravity.CENTER
+            setPadding(0, dp(10), 0, dp(8))
+            setOnClickListener {
+                scanStatus.text = "扫描中…"
+                Thread {
+                    try {
+                        val socket = java.net.DatagramSocket()
+                        socket.soTimeout = 5000
+                        socket.broadcast = true
+                        val data = "PADLINK_DISCOVER".toByteArray()
+                        val addr = java.net.InetAddress.getByName("255.255.255.255")
+                        socket.send(java.net.DatagramPacket(data, data.size, addr, 8766))
+                        val buf = ByteArray(256)
+                        val resp = java.net.DatagramPacket(buf, buf.size)
+                        socket.receive(resp)
+                        val json = JSONObject(String(buf, 0, resp.length))
+                        val ip = json.optString("ip", "")
+                        socket.close()
+                        runOnUiThread {
+                            if (ip.isNotEmpty()) {
+                                scanStatus.text = "找到: $ip"
+                                hostInput.setText(ip)
+                                connect(ip)
+                            } else scanStatus.text = "未发现设备"
+                        }
+                    } catch (e: Exception) {
+                        runOnUiThread { scanStatus.text = "未发现，请手动输入 IP" }
+                    }
+                }.start()
+            }
+        }
+        connectPage.addView(scanBtn, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            gravity = Gravity.CENTER
+        })
+        scanStatus = tv("", 12f, C_TEXT3).apply {
+            gravity = Gravity.CENTER
+        }
+        connectPage.addView(scanStatus, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            gravity = Gravity.CENTER
+        })
+
         root.addView(connectPage, LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
 
