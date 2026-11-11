@@ -1,4 +1,5 @@
 using PadLink.Core;
+using System.Buffers.Binary;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -20,6 +21,8 @@ public static class WebSocketHandler
         if (!ctx.WebSockets.IsWebSocketRequest) { ctx.Response.StatusCode = 400; return; }
         using var ws = await ctx.WebSockets.AcceptWebSocketAsync();
         Interlocked.Increment(ref _connected);
+        // 每个连接独立的按键状态：断开时统一抬起，避免 Shift/Ctrl 等粘连在 PC 上
+        var session = new InputSession();
         try
         {
             // 8KB 起步，长剪贴板等大消息按需扩容；常态小包不会重复分配
@@ -39,10 +42,12 @@ public static class WebSocketHandler
                 } while (!result.EndOfMessage);
                 if (closed) break;
 
-                // 二进制帧 = 手机麦克风 PCM 音频流 → 电脑扬声器
+                // 二进制帧：首字节为操作码。'A' = 手机麦克风 PCM（其余字节为音频），
+                // 'M'/'S'/'K'/'B'/'R' = 输入事件（定长小包，热路径零分配、零解析）
                 if (result.MessageType == WebSocketMessageType.Binary)
                 {
-                    AudioPlaybackService.WritePcm(buffer[..len]);
+                    if (len > 0 && buffer[0] == (byte)'A') AudioPlaybackService.WritePcm(buffer[1..len]);
+                    else HandleBinaryInput(session, buffer, len);
                     continue;
                 }
 
@@ -134,7 +139,43 @@ public static class WebSocketHandler
             }
         }
         catch (Exception ex) { Log.Info($"WS 连接异常: {ex.GetType().Name}: {ex.Message}"); }
-        finally { Interlocked.Decrement(ref _connected); Log.Info($"WS 断开，当前连接数 {ConnectedCount}"); }
+        finally
+        {
+            session.ReleaseAll();
+            Interlocked.Decrement(ref _connected);
+            Log.Info($"WS 断开，当前连接数 {ConnectedCount}");
+        }
+    }
+
+    /// <summary>二进制输入协议 v2（小端，首字节为操作码）：
+    /// M dx16 dy16 相对移动（像素×16）｜ S dy16 滚轮（像素×16，正=手指下滑）
+    /// K vk flags 键（bit0 按下，bit1 自动重复）｜ B btn flags 鼠标键（bit0 按下）｜ R 全部抬起</summary>
+    private static void HandleBinaryInput(InputSession session, byte[] b, int len)
+    {
+        try
+        {
+            switch (b[0])
+            {
+                case (byte)'M' when len >= 5:
+                    InputService.MouseMove(
+                        BinaryPrimitives.ReadInt16LittleEndian(b.AsSpan(1)) / 16.0,
+                        BinaryPrimitives.ReadInt16LittleEndian(b.AsSpan(3)) / 16.0);
+                    break;
+                case (byte)'S' when len >= 3:
+                    InputService.Scroll(0, BinaryPrimitives.ReadInt16LittleEndian(b.AsSpan(1)) / 16.0);
+                    break;
+                case (byte)'K' when len >= 3:
+                    session.Key(b[1], (b[2] & 1) != 0);
+                    break;
+                case (byte)'B' when len >= 3:
+                    session.Button(b[1], (b[2] & 1) != 0);
+                    break;
+                case (byte)'R':
+                    session.ReleaseAll();
+                    break;
+            }
+        }
+        catch (Exception ex) { Log.Info($"binary input 异常: {ex.Message}"); }
     }
 
     /// <summary>紧凑协议快速路径。返回 true 表示已消费（无论执行成败），false 表示不是紧凑消息。</summary>
