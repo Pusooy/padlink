@@ -12,6 +12,11 @@ import json
 import time
 import websockets
 
+try:
+    import sys as _sys; _sys.stdout.reconfigure(encoding="utf-8")
+except Exception:
+    pass
+
 user32 = ctypes.windll.user32
 
 WH_KEYBOARD_LL = 13
