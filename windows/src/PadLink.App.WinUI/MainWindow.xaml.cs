@@ -88,6 +88,16 @@ public sealed partial class MainWindow : Window
         Close();
     }
 
+    /// <summary>启动时隐藏到托盘（不激活窗口）。</summary>
+    public void HideToTray()
+    {
+        try
+        {
+            AppWindow.Hide();
+        }
+        catch (Exception ex) { Log.Error("隐藏到托盘失败", ex); }
+    }
+
     /// <summary>从托盘唤回窗口。</summary>
     public void ShowFromTray()
     {
