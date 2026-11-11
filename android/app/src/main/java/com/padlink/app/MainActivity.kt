@@ -51,22 +51,40 @@ import kotlin.math.max
  */
 class MainActivity : android.app.Activity() {
 
-    private val C_BG = Color.parseColor("#0d0e12")
-    private val C_SURFACE = Color.parseColor("#15171d")
-    private val C_SURFACE2 = Color.parseColor("#1b1e26")
-    private val C_PAD = Color.parseColor("#161821")
-    private val C_EDGE = Color.parseColor("#252935")
-    private val C_TEXT = Color.parseColor("#e9eaef")
-    private val C_TEXT2 = Color.parseColor("#9aa1ad")
-    private val C_TEXT3 = Color.parseColor("#6b7280")
-    private val C_ACCENT = Color.parseColor("#4c86ff")
-    private val C_ACCENT_SOFT = Color.parseColor("#4c86ff33")
-    private val C_OK = Color.parseColor("#34d399")
-    private val C_DANGER = Color.parseColor("#f87171")
+    private val C_BG = Color.parseColor("#0a0b0f")
+    private val C_SURFACE = Color.parseColor("#13151b")
+    private val C_SURFACE2 = Color.parseColor("#1c1f28")
+    private val C_PAD = Color.parseColor("#0f1117")
+    private val C_EDGE = Color.parseColor("#242836")
+    private val C_TEXT = Color.parseColor("#eceef4")
+    private val C_TEXT2 = Color.parseColor("#9aa3b2")
+    private val C_TEXT3 = Color.parseColor("#626a78")
+    private val C_ACCENT = Color.parseColor("#5b8cff")
+    private val C_ACCENT_SOFT = Color.parseColor("#5b8cff30")
+    private val C_OK = Color.parseColor("#3ddc97")
+    private val C_DANGER = Color.parseColor("#ff6b6b")
 
     private lateinit var vibrator: Vibrator
     private val handler = Handler(Looper.getMainLooper())
-    private val http = OkHttpClient()
+
+    /** OkHttp 默认不开 TCP_NODELAY，输入小包会被 Nagle 算法攒住（最坏 +40ms）。
+     *  这里对所有出站套接字强制关闭 Nagle——蓝牙级延迟的关键一步。 */
+    private class NoDelaySocketFactory : javax.net.SocketFactory() {
+        private val def = javax.net.SocketFactory.getDefault()
+        private fun fix(s: java.net.Socket): java.net.Socket =
+            s.apply { try { tcpNoDelay = true } catch (_: Exception) {} }
+        override fun createSocket(): java.net.Socket = fix(def.createSocket())
+        override fun createSocket(host: String?, port: Int): java.net.Socket = fix(def.createSocket(host, port))
+        override fun createSocket(host: String?, port: Int, localHost: java.net.InetAddress?, localPort: Int): java.net.Socket =
+            fix(def.createSocket(host, port, localHost, localPort))
+        override fun createSocket(host: java.net.InetAddress?, port: Int): java.net.Socket = fix(def.createSocket(host, port))
+        override fun createSocket(address: java.net.InetAddress?, port: Int, localAddress: java.net.InetAddress?, localPort: Int): java.net.Socket =
+            fix(def.createSocket(address, port, localAddress, localPort))
+    }
+
+    private val http = OkHttpClient.Builder()
+        .socketFactory(NoDelaySocketFactory())
+        .build()
 
     private var ws: WebSocket? = null
     private var connected = false
@@ -88,7 +106,6 @@ class MainActivity : android.app.Activity() {
     private lateinit var scanStatus: TextView
     private lateinit var hintView: TextView
     private lateinit var padView: TouchpadView
-    private lateinit var kbInput: EditText
     private lateinit var volSeek: SeekBar
     private lateinit var volNum: TextView
     private lateinit var winListBox: LinearLayout
@@ -144,6 +161,12 @@ class MainActivity : android.app.Activity() {
         pingJob?.let { handler.removeCallbacks(it) }
         try { ws?.close(1000, null) } catch (_: Exception) {}
         super.onDestroy()
+    }
+
+    override fun onPause() {
+        releaseKeyboard()
+        sendReleaseAll()
+        super.onPause()
     }
 
     /** Android 15+ 强制 edge-to-edge（targetSdk 35）：把系统栏区域作为内边距传给根布局。 */
@@ -306,20 +329,22 @@ class MainActivity : android.app.Activity() {
             setPadding(dp(14), dp(13), dp(14), dp(13))
             if (host.isNotEmpty()) setText(host)
         }
-        connectPage.addView(hostInput, LinearLayout.LayoutParams(dp(320),
-            ViewGroup.LayoutParams.WRAP_CONTENT))
+        connectPage.addView(hostInput, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+            .apply { marginStart = dp(30); marginEnd = dp(30) })
 
         val connectBtn = tv("连接到电脑", 16f, Color.WHITE, true).apply {
             gravity = Gravity.CENTER
             background = bg(C_ACCENT, 13f)
             setPadding(0, dp(14), 0, dp(14))
             setOnClickListener {
-                        buzz("page")
+                buzz("page")
                 connect(hostInput.text.toString().trim())
             }
         }
-        connectPage.addView(connectBtn, LinearLayout.LayoutParams(dp(320),
-            ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(14) })
+        connectPage.addView(connectBtn, LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT)
+            .apply { topMargin = dp(14); marginStart = dp(30); marginEnd = dp(30) })
 
         // 局域网扫描
         val scanBtn = tv("◎  扫描局域网", 13f, C_ACCENT).apply {
@@ -425,18 +450,18 @@ class MainActivity : android.app.Activity() {
             LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
                 gravity = Gravity.CENTER
-                setPadding(0, dp(6), 0, dp(6))
+                setPadding(dp(2), dp(7), dp(2), dp(7))
                 layoutParams = LinearLayout.LayoutParams(0,
                     ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
                 // 矢量图标
                 val iv = ImageView(this@MainActivity).apply {
                     setImageResource(iconRes)
-                    layoutParams = LinearLayout.LayoutParams(dp(20), dp(20))
+                    layoutParams = LinearLayout.LayoutParams(dp(22), dp(22))
                     imageTintList = android.content.res.ColorStateList.valueOf(C_TEXT3)
                 }
                 addView(iv)
                 // 标签
-                addView(tv(label, 9.5f, C_TEXT3))
+                addView(tv(label, 10f, C_TEXT3).apply { setPadding(0, dp(3), 0, 0) })
                 setOnClickListener { selectDock(key); buzz("page") }
             }
         }
@@ -454,7 +479,10 @@ class MainActivity : android.app.Activity() {
         if (host.isNotEmpty()) connect(host)
     }
 
+    private var currentPage = "pad"
+
     private fun showPage(key: String) {
+        currentPage = key
         pages.forEach { (k, v) -> v.visibility = if (k == key) View.VISIBLE else View.GONE }
     }
 
@@ -466,11 +494,12 @@ class MainActivity : android.app.Activity() {
             val color = if (on) C_ACCENT else C_TEXT3
             iv.imageTintList = android.content.res.ColorStateList.valueOf(color)
             lb.setTextColor(color)
-            b.background = if (on) bg(Color.parseColor("#4c86ff20"), 12f) else null
+            b.background = if (on) bg(Color.parseColor("#5b8cff26"), 14f) else null
         }
     }
 
     private fun selectDock(key: String) {
+        if (currentPage == "kb" && key != "kb") releaseKeyboard()
         showPage(key)
         selectDockQuiet(key)
         buzz("page")
@@ -480,10 +509,8 @@ class MainActivity : android.app.Activity() {
                 sendJson(JSONObject().put("t", "get_sysinfo"))
             }
             "apps" -> { loadWindows(); loadPrograms() }
-            "screen" -> Unit
-            "files" -> Unit
             "pad" -> hintVisible(true)
-            "kb" -> kbInput.requestFocus()
+            else -> Unit
         }
     }
 
@@ -508,20 +535,20 @@ class MainActivity : android.app.Activity() {
             layoutParams = FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT,
                 Gravity.TOP or Gravity.END).apply {
-                topMargin = dp(8); rightMargin = dp(8)
+                topMargin = dp(10); rightMargin = dp(10)
             }
         }
-        listOf("◹" to "left", "◉" to "middle", "◺" to "right").forEach { (glyph, btn) ->
-            val b = tv(glyph, 18f, C_TEXT2).apply {
+        listOf("左" to 0, "中" to 2, "右" to 1).forEach { (label, btn) ->
+            val b = tv(label, 13f, C_TEXT2, true).apply {
                 gravity = Gravity.CENTER
-                background = strokeBg(C_SURFACE, C_EDGE, 13f)
+                background = strokeBg(C_SURFACE, C_EDGE, 14f)
                 setOnClickListener {
-                    sendJson(JSONObject().put("t", "click").put("btn", btn))
-                    buzz(if (btn == "right") "right" else if (btn == "middle") "middle" else "left")
+                    sendBtn(btn, true); sendBtn(btn, false)
+                    buzz(if (btn == 1) "right" else if (btn == 2) "middle" else "left")
                 }
             }
-            quick.addView(b, LinearLayout.LayoutParams(dp(42), dp(42)).apply {
-                bottomMargin = dp(6)
+            quick.addView(b, LinearLayout.LayoutParams(dp(44), dp(44)).apply {
+                bottomMargin = dp(7)
             })
         }
         frame.addView(quick)
@@ -536,147 +563,218 @@ class MainActivity : android.app.Activity() {
     }
 
     // ============ 键盘页 ============
-    private data class KeySpec(val label: String, val name: String, val weight: Float)
-
-    private val rows: List<List<KeySpec>> = listOf(
-        listOf(KeySpec("~", "`", 1f), KeySpec("!", "1", 1f), KeySpec("@", "2", 1f),
-               KeySpec("#", "3", 1f), KeySpec("$", "4", 1f), KeySpec("%", "5", 1f),
-               KeySpec("^", "6", 1f), KeySpec("&", "7", 1f), KeySpec("*", "8", 1f),
-               KeySpec("(", "9", 1f), KeySpec(")", "0", 1f), KeySpec("_", "-", 1f),
-               KeySpec("+", "=", 1f), KeySpec("⌫", "backspace", 2f)),
-        listOf(KeySpec("⇥", "tab", 1.5f), KeySpec("q", "q", 1f), KeySpec("w", "w", 1f),
-               KeySpec("e", "e", 1f), KeySpec("r", "r", 1f), KeySpec("t", "t", 1f),
-               KeySpec("y", "y", 1f), KeySpec("u", "u", 1f), KeySpec("i", "i", 1f),
-               KeySpec("o", "o", 1f), KeySpec("p", "p", 1f), KeySpec("{", "[", 1f),
-               KeySpec("}", "]", 1f), KeySpec("|", "\\", 1f)),
-        listOf(KeySpec("⇪", "caps_lock", 1.5f), KeySpec("a", "a", 1f), KeySpec("s", "s", 1f),
-               KeySpec("d", "d", 1f), KeySpec("f", "f", 1f), KeySpec("g", "g", 1f),
-               KeySpec("h", "h", 1f), KeySpec("j", "j", 1f), KeySpec("k", "k", 1f),
-               KeySpec("l", "l", 1f), KeySpec(":", ";", 1f), KeySpec("\"", "'", 1f),
-               KeySpec("⏎", "enter", 2f)),
-        listOf(KeySpec("⇧", "shift", 2.4f), KeySpec("z", "z", 1f), KeySpec("x", "x", 1f),
-               KeySpec("c", "c", 1f), KeySpec("v", "v", 1f), KeySpec("b", "b", 1f),
-               KeySpec("n", "n", 1f), KeySpec("m", "m", 1f), KeySpec("<", ",", 1f),
-               KeySpec(">", ".", 1f), KeySpec("?", "/", 1f), KeySpec("⇧", "shift", 2.4f)),
-        listOf(KeySpec("ctrl", "ctrl", 1.5f), KeySpec("win", "win", 1f),
-               KeySpec("alt", "alt", 1f), KeySpec("空格", "space", 5.5f),
-               KeySpec("esc", "esc", 1.5f), KeySpec("←", "left", 0.8f),
-               KeySpec("↑", "up", 0.8f), KeySpec("↓", "down", 0.8f),
-               KeySpec("→", "right", 0.8f))
+    // 蓝牙键盘语义：每个键按下/抬起各发一条 VK 事件直达 PC，
+    // 拼音组字完全交给电脑自己的输入法。手机端没有任何输入缓冲或文本框。
+    private data class KeySpec(
+        val label: String,
+        val shiftLabel: String? = null,
+        val vk: Int,
+        val weight: Float = 1f,
+        val kind: Int = 0,          // 0 普通 / 1 修饰键 / 2 锁定键 / 3 连发键
     )
 
-    private val modKeys = setOf("ctrl", "win", "alt", "shift", "caps_lock", "tab",
-                                "enter", "backspace", "esc")
-    private var mods = mutableListOf<String>()
-    private var shiftOn = false
-    private var capsOn = false
-    private var keyViews = mutableListOf<MutableList<TextView>>()
+    private val kbRows: List<List<KeySpec>> = listOf(
+        listOf(
+            KeySpec("esc", vk = 0x1B, weight = 1.3f),
+            KeySpec("F1", vk = 0x70), KeySpec("F2", vk = 0x71), KeySpec("F3", vk = 0x72),
+            KeySpec("F4", vk = 0x73), KeySpec("F5", vk = 0x74), KeySpec("F6", vk = 0x75),
+            KeySpec("F7", vk = 0x76), KeySpec("F8", vk = 0x77), KeySpec("F9", vk = 0x78),
+            KeySpec("F10", vk = 0x79), KeySpec("F11", vk = 0x7A), KeySpec("F12", vk = 0x7B),
+            KeySpec("del", vk = 0x2E, weight = 1.3f, kind = 3)),
+        listOf(
+            KeySpec("`", "~", 0xC0), KeySpec("1", "!", 0x31), KeySpec("2", "@", 0x32),
+            KeySpec("3", "#", 0x33), KeySpec("4", "$", 0x34), KeySpec("5", "%", 0x35),
+            KeySpec("6", "^", 0x36), KeySpec("7", "&", 0x37), KeySpec("8", "*", 0x38),
+            KeySpec("9", "(", 0x39), KeySpec("0", ")", 0x30), KeySpec("-", "_", 0xBD),
+            KeySpec("=", "+", 0xBB), KeySpec("⌫", vk = 0x08, weight = 1.9f, kind = 3)),
+        listOf(
+            KeySpec("tab", vk = 0x09, weight = 1.5f),
+            KeySpec("q", vk = 0x51), KeySpec("w", vk = 0x57), KeySpec("e", vk = 0x45),
+            KeySpec("r", vk = 0x52), KeySpec("t", vk = 0x54), KeySpec("y", vk = 0x59),
+            KeySpec("u", vk = 0x55), KeySpec("i", vk = 0x49), KeySpec("o", vk = 0x4F),
+            KeySpec("p", vk = 0x50), KeySpec("[", "{", 0xDB), KeySpec("]", "}", 0xDD),
+            KeySpec("\\", "|", 0xDC)),
+        listOf(
+            KeySpec("caps", vk = 0x14, weight = 1.8f, kind = 2),
+            KeySpec("a", vk = 0x41), KeySpec("s", vk = 0x53), KeySpec("d", vk = 0x44),
+            KeySpec("f", vk = 0x46), KeySpec("g", vk = 0x47), KeySpec("h", vk = 0x48),
+            KeySpec("j", vk = 0x4A), KeySpec("k", vk = 0x4B), KeySpec("l", vk = 0x4C),
+            KeySpec(";", ":", 0xBA), KeySpec("'", "\"", 0xDE),
+            KeySpec("⏎", vk = 0x0D, weight = 1.8f, kind = 3)),
+        listOf(
+            KeySpec("⇧", vk = 0xA0, weight = 1.9f, kind = 1),
+            KeySpec("z", vk = 0x5A), KeySpec("x", vk = 0x58), KeySpec("c", vk = 0x43),
+            KeySpec("v", vk = 0x56), KeySpec("b", vk = 0x42), KeySpec("n", vk = 0x4E),
+            KeySpec("m", vk = 0x4D), KeySpec(",", "<", 0xBC), KeySpec(".", ">", 0xBE),
+            KeySpec("/", "?", 0xBF), KeySpec("⇧", vk = 0xA0, weight = 1.9f, kind = 1)),
+        listOf(
+            KeySpec("ctrl", vk = 0xA2, weight = 1.4f, kind = 1),
+            KeySpec("win", vk = 0x5B, weight = 1.2f, kind = 1),
+            KeySpec("alt", vk = 0xA4, weight = 1.2f, kind = 1),
+            KeySpec("", vk = 0x20, weight = 4.6f, kind = 3),
+            KeySpec("←", vk = 0x25, weight = 0.8f, kind = 3),
+            KeySpec("↑", vk = 0x26, weight = 0.8f, kind = 3),
+            KeySpec("↓", vk = 0x28, weight = 0.8f, kind = 3),
+            KeySpec("→", vk = 0x27, weight = 0.8f, kind = 3)),
+    )
+
+    private val pressedKeys = HashSet<Int>()     // 手指正按着的 VK
+    private val latchedMods = HashSet<Int>()     // 粘滞中的修饰键（保持按下）
+    private val modDownAt = HashMap<Int, Long>()
+    private val modTouchedOther = HashSet<Int>() // 按住期间敲过别的键 → 抬起时不粘滞
+    private val keyRefs = mutableListOf<Pair<TextView, KeySpec>>()
+    private var capsAssumed = false
+    private var repeatVk = 0
+
+    private val repeatRun = object : Runnable {
+        override fun run() {
+            if (repeatVk == 0) return
+            sendKeyVk(repeatVk, true, repeat = true)
+            handler.postDelayed(this, 35)
+        }
+    }
+    private val repeatStart = Runnable {
+        if (repeatVk != 0) {
+            sendKeyVk(repeatVk, true, repeat = true)
+            handler.postDelayed(repeatRun, 35)
+        }
+    }
+
+    private fun shiftActive() = (0xA0 in pressedKeys) || (0xA0 in latchedMods)
 
     private fun buildKeyboardPage(): View {
         val col = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(0, dp(4), 0, 0)
+            setPadding(0, dp(2), 0, 0)
         }
-        kbInput = EditText(this).apply {
-            hint = "输入文字或使用下方键盘（支持中文）"
-            textSize = 15.5f
-            setSingleLine()
-            setTextColor(C_TEXT)
-            setHintTextColor(C_TEXT3)
-            background = strokeBg(C_SURFACE, C_EDGE, 12f)
-            setPadding(dp(13), dp(11), dp(13), dp(11))
-        }
-        col.addView(kbInput, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-
         val grid = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         col.addView(grid, LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f).apply { topMargin = dp(7) })
+            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
 
-        keyViews = mutableListOf()
-        rows.forEach { row ->
+        keyRefs.clear()
+        kbRows.forEach { row ->
             val rowView = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
                 layoutParams = LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f)
+                    ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f).apply { topMargin = dp(3) }
             }
-            val refs = mutableListOf<TextView>()
             row.forEach { spec ->
-                val isMod = modKeys.contains(spec.name)
-                val label = if (spec.label == spec.name) spec.label else "${spec.label}\n${spec.name}"
                 val key = TextView(this).apply {
-                    text = if (spec.label.length == 1 && spec.name.length == 1 && spec.label != spec.name)
-                        "${spec.label}${spec.name}" else spec.label
-                    textSize = if (spec.label.length > 1) 11.5f else 14.5f
+                    textSize = if (spec.label.length == 1) 15f else 10.5f
+                    typeface = Typeface.DEFAULT_BOLD
                     gravity = Gravity.CENTER
-                    setTextColor(if (isMod) C_TEXT2 else C_TEXT)
-                    background = bg(if (isMod) C_SURFACE2 else C_SURFACE, 8f)
+                    setTextColor(C_TEXT)
+                    background = bg(C_SURFACE, 9f)
                     layoutParams = LinearLayout.LayoutParams(0,
-                        ViewGroup.LayoutParams.MATCH_PARENT, spec.weight).apply {
-                        marginEnd = dp(4)
+                        ViewGroup.LayoutParams.MATCH_PARENT, spec.weight).apply { marginEnd = dp(3) }
+                    setOnTouchListener { v, ev ->
+                        when (ev.actionMasked) {
+                            MotionEvent.ACTION_DOWN -> { v.isPressed = true; onKeyPress(spec); true }
+                            MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                                v.isPressed = false; onKeyRelease(spec); true }
+                            else -> false
+                        }
                     }
-                    setOnClickListener { keyPress(spec.name, spec.label) }
                 }
+                keyRefs.add(key to spec)
                 rowView.addView(key)
-                refs.add(key)
             }
             grid.addView(rowView)
-            keyViews.add(refs)
         }
-
-        kbInput.addTextChangedListener(object : TextWatcher {
-            override fun afterTextChanged(s: Editable?) {
-                handler.removeCallbacks(flushRun)
-                if (!s.isNullOrEmpty()) handler.postDelayed(flushRun, 320)
-            }
-            override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
-            override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
-        })
+        refreshKeyStyles()
         return col
     }
 
-    private val flushRun = Runnable {
-        if (!this::kbInput.isInitialized) return@Runnable
-        val v = kbInput.text.toString()
-        if (v.isNotEmpty()) {
-            sendJson(JSONObject().put("t", "text").put("value", v))
-            kbInput.setText("")
-        }
-    }
-
-    private fun keyPress(name: String, label: String) {
+    private fun onKeyPress(spec: KeySpec) {
         buzz("tap")
-        when (name) {
-            "shift" -> { shiftOn = !shiftOn; refreshKeyStyles(); return }
-            "caps_lock" -> { capsOn = !capsOn; refreshKeyStyles(); return }
-            "ctrl", "win", "alt" -> {
-                if (mods.contains(name)) mods.remove(name) else mods.add(name)
-                refreshKeyStyles(); return
+        when (spec.kind) {
+            1 -> {  // 修饰键：按下发 down，抬起时决定是否粘滞
+                if (spec.vk in latchedMods) return
+                pressedKeys.add(spec.vk)
+                modDownAt[spec.vk] = System.currentTimeMillis()
+                modTouchedOther.remove(spec.vk)
+                sendKeyVk(spec.vk, true)
+            }
+            2 -> {  // CapsLock：点按 down+up，本地指示灯
+                sendKeyVk(spec.vk, true)
+                sendKeyVk(spec.vk, false)
+                capsAssumed = !capsAssumed
+            }
+            else -> {
+                // 需要 Shift 的符号：像真键盘一样先包一层 Shift
+                if (spec.shiftLabel != null && !shiftActive()) sendKeyVk(0xA0, true)
+                pressedKeys.add(spec.vk)
+                sendKeyVk(spec.vk, true)
+                if (spec.kind == 3) {
+                    repeatVk = spec.vk
+                    handler.postDelayed(repeatStart, 400)
+                }
+                // 按住的修饰键标记「被使用」，抬起时不再粘滞
+                pressedKeys.forEach { if (it != spec.vk) modTouchedOther.add(it) }
             }
         }
-        var ch = name
-        if (ch.length == 1) {
-            if (ch[0].isLowerCase()) ch = if (shiftOn != capsOn) ch.uppercase() else ch
-            else if (shiftOn) ch = label
-        }
-        sendKey(if (mods.isNotEmpty()) mods.joinToString("+") + "+" + ch else ch)
-        if (shiftOn) shiftOn = false
-        if (mods.isNotEmpty()) mods = mutableListOf()
         refreshKeyStyles()
     }
 
+    private fun onKeyRelease(spec: KeySpec) {
+        when (spec.kind) {
+            1 -> {
+                pressedKeys.remove(spec.vk)
+                val quick = System.currentTimeMillis() - (modDownAt[spec.vk] ?: 0L) < 220
+                when {
+                    spec.vk in latchedMods -> { latchedMods.remove(spec.vk); sendKeyVk(spec.vk, false) }
+                    quick && spec.vk !in modTouchedOther -> latchedMods.add(spec.vk)  // 粘滞保持
+                    else -> sendKeyVk(spec.vk, false)
+                }
+                modDownAt.remove(spec.vk)
+            }
+            else -> {
+                handler.removeCallbacks(repeatStart)
+                handler.removeCallbacks(repeatRun)
+                repeatVk = 0
+                pressedKeys.remove(spec.vk)
+                sendKeyVk(spec.vk, false)
+                if (spec.shiftLabel != null && !shiftActive()) sendKeyVk(0xA0, false)
+                releaseLatchedMods()
+            }
+        }
+        refreshKeyStyles()
+    }
+
+    private fun releaseLatchedMods() {
+        if (latchedMods.isEmpty()) return
+        latchedMods.forEach { sendKeyVk(it, false) }
+        latchedMods.clear()
+    }
+
+    /** 离开键盘页 / 退到后台：抬起所有键，杜绝「Shift 卡住」这类幽灵状态。 */
+    private fun releaseKeyboard() {
+        handler.removeCallbacks(repeatStart)
+        handler.removeCallbacks(repeatRun)
+        repeatVk = 0
+        if (pressedKeys.isNotEmpty() || latchedMods.isNotEmpty()) {
+            sendReleaseAll()
+            pressedKeys.clear(); latchedMods.clear(); modDownAt.clear(); modTouchedOther.clear()
+            refreshKeyStyles()
+        }
+    }
+
     private fun refreshKeyStyles() {
-        if (keyViews.isEmpty()) return
-        keyViews.forEachIndexed { r, refs ->
-            refs.forEachIndexed { c, view ->
-                val spec = rows[r][c]
-                val isMod = modKeys.contains(spec.name)
-                val on = (spec.name == "shift" && shiftOn) ||
-                         (spec.name == "caps_lock" && capsOn) ||
-                         mods.contains(spec.name)
-                view.background = if (on) strokeBg(C_ACCENT_SOFT, C_ACCENT, 8f)
-                                  else bg(if (isMod) C_SURFACE2 else C_SURFACE, 8f)
-                view.setTextColor(if (on) C_ACCENT else if (isMod) C_TEXT2 else C_TEXT)
+        if (keyRefs.isEmpty()) return
+        val shift = shiftActive()
+        keyRefs.forEach { (view, spec) ->
+            val pressed = spec.vk in pressedKeys
+            val on = (spec.vk in latchedMods) || (spec.kind == 2 && capsAssumed)
+            view.background = when {
+                on -> strokeBg(C_ACCENT_SOFT, C_ACCENT, 9f)
+                pressed -> strokeBg(C_SURFACE2, C_ACCENT, 9f)
+                else -> bg(C_SURFACE, 9f)
+            }
+            view.setTextColor(if (on || pressed) C_ACCENT else C_TEXT)
+            view.text = when {
+                spec.shiftLabel != null && shift -> spec.shiftLabel
+                spec.vk in 0x41..0x5A && (shift != capsAssumed) -> spec.vk.toChar().toString()
+                else -> spec.label
             }
         }
     }
@@ -1302,13 +1400,55 @@ class MainActivity : android.app.Activity() {
         if (!connected) return
         try { ws?.send(o.toString()) } catch (_: Exception) {}
     }
+
+    // ---- 二进制输入协议 v2（小端定长小包，热路径零 JSON、零解析）----
+    // M dx16 dy16 移动（像素×16）｜ S dy16 滚轮 ｜ K vk flags 键 ｜ B btn flags 鼠标键 ｜ R 释放全部
+    private val bin5 = ByteArray(5)
+    private val bin3 = ByteArray(3)
+
+    @Suppress("DEPRECATION_ERROR")
+    private fun sendBin5(op: Byte, s1: Long, s2: Long) {
+        val w = ws ?: return
+        bin5[0] = op
+        bin5[1] = (s1.toInt() and 0xFF).toByte(); bin5[2] = ((s1.toInt() shr 8) and 0xFF).toByte()
+        bin5[3] = (s2.toInt() and 0xFF).toByte(); bin5[4] = ((s2.toInt() shr 8) and 0xFF).toByte()
+        try { w.send(okio.ByteString.of(bin5, 0, 5)) } catch (_: Exception) {}
+    }
+
+    @Suppress("DEPRECATION_ERROR")
+    private fun sendBin3(op: Byte, b1: Int, b2: Int) {
+        val w = ws ?: return
+        bin3[0] = op; bin3[1] = b1.toByte(); bin3[2] = b2.toByte()
+        try { w.send(okio.ByteString.of(bin3, 0, 3)) } catch (_: Exception) {}
+    }
+
+    private fun i16(v: Long): Long = v.coerceIn(-32768L, 32767L)
+
     private fun sendMove(dx: Double, dy: Double) {
         if (!connected) return
-        try { ws?.send("M$dx,$dy") } catch (_: Exception) {}
+        sendBin5(0x4D, i16(Math.round(dx * 16)), i16(Math.round(dy * 16)))
     }
+
     private fun sendScroll(dy: Double) {
         if (!connected) return
-        try { ws?.send("S0,$dy") } catch (_: Exception) {}
+        val v = i16(Math.round(dy * 16)).toInt()
+        sendBin3(0x53, v and 0xFF, (v shr 8) and 0xFF)
+    }
+
+    private fun sendKeyVk(vk: Int, down: Boolean, repeat: Boolean = false) {
+        if (!connected) return
+        sendBin3(0x4B, vk, (if (down) 1 else 0) or (if (repeat) 2 else 0))
+    }
+
+    private fun sendBtn(btn: Int, down: Boolean) {
+        if (!connected) return
+        sendBin3(0x42, btn, if (down) 1 else 0)
+    }
+
+    @Suppress("DEPRECATION_ERROR")
+    private fun sendReleaseAll() {
+        if (!connected) return
+        try { ws?.send(okio.ByteString.of(byteArrayOf(0x52), 0, 1)) } catch (_: Exception) {}
     }
     private fun sendClick(btn: String) = sendJson(JSONObject().put("t", "click").put("btn", btn))
     private fun sendDown(btn: String) = sendJson(JSONObject().put("t", "down").put("btn", btn))
@@ -1328,34 +1468,14 @@ class MainActivity : android.app.Activity() {
         private var last: Pair<Float, Float>? = null
         private var scrollRef: Int? = null
         private var scrollAcc = 0f
-        private val tapMs = 250L
+        private val tapMs = 220L
         private val tapDist = 10f
+        private var dragHeld = false
+        private var longPressFired = false
 
-        // 帧批量合并：多帧 touchmove 合并为一条消息，消除高频网络压力
-        private var pendingDx = 0.0
-        private var pendingDy = 0.0
-        private var scrollDy = 0.0
-        private var framePending = false
-        private val frameCallback = android.view.Choreographer.FrameCallback {
-            framePending = false
-            if (abs(pendingDx) > 0.05 || abs(pendingDy) > 0.05) {
-                sendMove(pendingDx, pendingDy)
-                pendingDx = 0.0; pendingDy = 0.0
-            }
-            if (abs(scrollDy) > 0.05) {
-                sendScroll(scrollDy)
-                scrollDy = 0.0
-            }
-        }
-
-        private fun queueFrame(dx: Double, dy: Double, scrolly: Double = 0.0) {
-            pendingDx += dx; pendingDy += dy; scrollDy += scrolly
-            if (!framePending) {
-                framePending = true
-                android.view.Choreographer.getInstance().postFrameCallback(frameCallback)
-            }
-        }
-
+        // 低延迟关键：每条 MOVE 事件即时出站，绝不攒帧。
+        // 攒帧策略（Choreographer/rAF）最多引入 +16ms——体感明显，已全部移除。
+        // 亚像素精度靠协议里的 ×16 定点数 + 服务端余量累积，不会因 <1px 而丢移动。
         @SuppressLint("ClickableViewAccessibility")
         override fun onTouchEvent(e: MotionEvent): Boolean {
             when (e.actionMasked) {
@@ -1369,6 +1489,18 @@ class MainActivity : android.app.Activity() {
                     val ids = ptrs.keys.toList()
                     if (ids.size == 1) {
                         last = e.getX(0) to e.getY(0)
+                        longPressFired = false
+                        // 长按 450ms 未移动 = 按住左键（拖拽）
+                        handler.postDelayed({
+                            val p = ptrs.values.firstOrNull() ?: return@postDelayed
+                            if (!p.moved && ptrs.size == 1 && !longPressFired &&
+                                System.currentTimeMillis() - p.startMs >= 430) {
+                                longPressFired = true
+                                dragHeld = true
+                                sendBtn(0, true)
+                                buzz("left")
+                            }
+                        }, 450)
                     } else if (ids.size >= 2) {
                         last = null
                         scrollRef = ids[0]
@@ -1390,9 +1522,7 @@ class MainActivity : android.app.Activity() {
                             if (l != null) {
                                 val dx = (x - l.first) * sens
                                 val dy = (y - l.second) * sens
-                                if (abs(dx) > 0.4f || abs(dy) > 0.4f)
-                                    sendJson(JSONObject().put("t", "move")
-                                        .put("dx", dx.toDouble()).put("dy", dy.toDouble()))
+                                if (dx != 0f || dy != 0f) sendMove(dx.toDouble(), dy.toDouble())
                             }
                             last = x to y
                         }
@@ -1406,9 +1536,7 @@ class MainActivity : android.app.Activity() {
                                     p.moved = true
                                     val y = e.getY(i)
                                     val dy = (y - p.y) * scrollSpd
-                                    if (abs(dy) > 0.4f)
-                                        sendJson(JSONObject().put("t", "scroll").put("dx", 0)
-                                            .put("dy", dy.toDouble()))
+                                    if (dy != 0f) sendScroll(dy.toDouble())
                                     scrollAcc += abs(dy)
                                     if (scrollAcc > 28f) {
                                         buzz("wheel")
@@ -1428,17 +1556,21 @@ class MainActivity : android.app.Activity() {
                     ptrs.remove(id)
                     if (wasTwo && p != null && !p.moved &&
                         System.currentTimeMillis() - p.startMs < tapMs) {
-                        sendJson(JSONObject().put("t", "click").put("btn", "right"))
+                        sendBtn(1, true); sendBtn(1, false)
                         buzz("right")
                     }
                     scrollRef = null
                 }
 
                 MotionEvent.ACTION_UP -> {
-                    if (ptrs.size == 1) {
+                    if (dragHeld) {
+                        sendBtn(0, false)
+                        dragHeld = false
+                    } else if (ptrs.size == 1) {
                         val p = ptrs.values.first()
-                        if (!p.moved && System.currentTimeMillis() - p.startMs < tapMs) {
-                            sendJson(JSONObject().put("t", "click").put("btn", "left"))
+                        if (!p.moved && !longPressFired &&
+                            System.currentTimeMillis() - p.startMs < tapMs) {
+                            sendBtn(0, true); sendBtn(0, false)
                             buzz("left")
                         }
                     }
@@ -1449,6 +1581,7 @@ class MainActivity : android.app.Activity() {
                 }
 
                 MotionEvent.ACTION_CANCEL -> {
+                    if (dragHeld) { sendBtn(0, false); dragHeld = false }
                     ptrs.clear()
                     last = null
                     scrollRef = null
