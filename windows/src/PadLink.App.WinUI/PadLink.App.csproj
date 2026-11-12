@@ -9,6 +9,7 @@
     <WindowsPackageType>None</WindowsPackageType>
     <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
     <EnableMsixTooling>true</EnableMsixTooling>
     <PublishSingleFile>false</PublishSingleFile>
     <SelfContained>true</SelfContained>
