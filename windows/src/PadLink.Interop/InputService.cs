@@ -92,10 +92,25 @@ internal static class InputService
     private static double _inRate;          // 实时手速 EWMA（px/ms，按主轴幅度）
     private static Thread? _pump;
     private static volatile bool _pumpRun;
-    private const int PumpPeriodMs = 2;
+    private const int PumpPeriodMs = 1;
 
     [DllImport("winmm.dll")]
     private static extern uint timeBeginPeriod(uint ms);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern IntPtr CreateWaitableTimerExW(IntPtr attrs, string? name, uint flags, uint access);
+
+    [DllImport("kernel32.dll")]
+    private static extern bool SetWaitableTimer(IntPtr h, ref long due, uint period, IntPtr comp, IntPtr arg, bool resume);
+
+    [DllImport("kernel32.dll")]
+    private static extern uint WaitForSingleObject(IntPtr h, uint ms);
+
+    [DllImport("kernel32.dll")]
+    private static extern bool CloseHandle(IntPtr h);
+
+    private const uint CREATE_WAITABLE_TIMER_HIGH_RESOLUTION = 0x00000002;
+    private const uint TIMER_ALL_ACCESS = 0x1F0003;
 
     public static void MouseMove(double dx, double dy)
     {
@@ -113,7 +128,12 @@ internal static class InputService
             var inst = mag / dtMs;
             _inRate = _inRate <= 0 ? inst : _inRate * 0.65 + inst * 0.35;
             _pendX += dx; _pendY += dy;
+            AuditArrivedPx += Math.Max(Math.Abs(dx), Math.Abs(dy));
+            AuditArrivedCount++;
+            DbgPendX = _pendX;
         }
+        ArriveStamps.Enqueue(Stopwatch.GetTimestamp());
+        while (ArriveStamps.Count > 256) ArriveStamps.TryDequeue(out _);
         StartPump();
         // 稀疏事件零延迟路径：距离上次注入已超过一个节拍，直接出
         if ((Stopwatch.GetTimestamp() - Volatile.Read(ref _lastInject)) * 1000.0 / Stopwatch.Frequency >= PumpPeriodMs)
@@ -140,12 +160,62 @@ internal static class InputService
 
     private static void PumpLoop()
     {
-        while (_pumpRun)
+        // 高分辨率等待定时器驱动节拍。不能用 Thread.Sleep：
+        // Win11 对后台/托盘进程会忽略 timeBeginPeriod，Sleep(1) 实际睡 15.6ms，
+        // 泵节拍劣化 10 倍（实测 1250ms 只 tick 81 次）——这就是残余卡顿的元凶。
+        var h = CreateWaitableTimerExW(IntPtr.Zero, null, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, TIMER_ALL_ACCESS);
+        if (h == IntPtr.Zero)
+            h = CreateWaitableTimerExW(IntPtr.Zero, null, 0, TIMER_ALL_ACCESS);
+        if (h != IntPtr.Zero)
         {
-            Thread.Sleep(PumpPeriodMs);
-            PumpTick();
+            long due = -1; // 负值 = 相对时间，100ns 单位 → 立即首次到期
+            if (!SetWaitableTimer(h, ref due, (uint)PumpPeriodMs, IntPtr.Zero, IntPtr.Zero, false))
+            {
+                CloseHandle(h);
+                h = IntPtr.Zero;
+            }
+        }
+        try
+        {
+            while (_pumpRun)
+            {
+                if (h != IntPtr.Zero)
+                {
+                    WaitForSingleObject(h, 100); // 周期 1ms；100ms 仅作兜底
+                }
+                else
+                {
+                    Thread.Sleep(PumpPeriodMs); // 兜底：老系统没有高分辨率定时器
+                }
+                PumpTick();
+            }
+        }
+        finally
+        {
+            if (h != IntPtr.Zero) CloseHandle(h);
         }
     }
+
+    /// <summary>移动注入时间戳（Stopwatch ticks，诊断用，环形保留 256 条）。</summary>
+    internal static readonly System.Collections.Concurrent.ConcurrentQueue<long> InjectStamps = new();
+
+    /// <summary>移动事件到达时间戳（诊断用，与 InjectStamps 对比定位丢拍侧）。</summary>
+    internal static readonly System.Collections.Concurrent.ConcurrentQueue<long> ArriveStamps = new();
+
+    /// <summary>泵循环心跳（每拍更新，无论是否有待注入）——用于确认线程是否被卡。</summary>
+    internal static long PumpHeartbeat;
+
+    /// <summary>像素守恒审计：进入泵的 px 总量 / 实际注入的 px 总量（主轴）。</summary>
+    internal static double AuditArrivedPx;
+    internal static double AuditInjectedPx;
+    internal static long AuditArrivedCount;
+    internal static long AuditInjectedCount;
+
+    /// <summary>泵内部状态快照（诊断用，每次 Tick 前后写）。</summary>
+    internal static double DbgPendX, DbgRemX, DbgInRate, DbgBudget, DbgLastTickMs;
+
+    /// <summary>与 InjectStamps 对齐的注入量级（|dx| 或 |dy| 主轴 px）。</summary>
+    internal static readonly System.Collections.Concurrent.ConcurrentQueue<int> InjectMag = new();
 
     private static void PumpTick()
     {
@@ -157,26 +227,53 @@ internal static class InputService
                 ? PumpPeriodMs
                 : (now - _lastInject) * 1000.0 / Stopwatch.Frequency;
             _lastInject = now;
-            if (_pendX == 0 && _pendY == 0) return;
+            DbgLastTickMs = dtMs;
+            // 提前返回必须同时看 pend 和 rem：突发缩放后余量全存在 rem 里（pend=0），
+            // 若只查 pend，余量会被困住永不注入（实测 20px 突发只出 2px、18px 被困）。
+            if (_pendX == 0 && _pendY == 0 && _remX == 0 && _remY == 0)
+            {
+                Volatile.Write(ref PumpHeartbeat, now);
+                return;
+            }
 
             // 每拍预算：按「实时手速 × 节拍时长」放行。
             // 慢速拖动（0.04px/ms）→ 每拍 ~1px，突发被摊成均匀小步；
             // 快速甩动（6px/ms）→ 每拍 ~25px，光标跟得上手，不拖尾。
-            var budget = Math.Clamp(_inRate * dtMs * 1.6 + 1.0, 1.0, 40.0);
-            var wantX = _pendX + _remX;
-            var wantY = _pendY + _remY;
-            var mag = Math.Max(Math.Abs(wantX), Math.Abs(wantY));
+            // 下限必须 > 1.0：缩放后 totalX 若落进 [0,1) 区间会被截断成 0，
+            // 该拍不注入、余量挂在 rem 上 → 偶发「隔一个事件才注入」的空洞。
+            var budget = Math.Clamp(_inRate * dtMs * 1.8 + 1.5, 1.5, 40.0);
+            // 记账不变式（像素守恒）：
+            //   total = pend + rem → 消费 consumed = min(total, budget)
+            //   注入 ix = truncate(consumed)，小数部分 rem = consumed - ix，
+            //   未消费的「原始尺度」余量 (total - consumed) 留回 pend。
+            // 三个历史 bug 都出在这段记账：负 pend（像素债）、判空漏掉 rem（余量被困）、
+            // 缩放后直接清 pend（未消费像素被销毁，实测 20px 突发只出 2px）。
+            var totalX = _pendX + _remX;
+            var totalY = _pendY + _remY;
+            var mag = Math.Max(Math.Abs(totalX), Math.Abs(totalY));
+            var consumedX = totalX;
+            var consumedY = totalY;
             if (mag > budget)
             {
                 var k = budget / mag;
-                wantX *= k; wantY *= k;
+                consumedX = totalX * k; consumedY = totalY * k;
             }
-            ix = (int)Math.Truncate(wantX);
-            iy = (int)Math.Truncate(wantY);
-            _remX = wantX - ix; _remY = wantY - iy;
-            _pendX -= wantX; _pendY -= wantY;
+            ix = (int)Math.Truncate(consumedX);
+            iy = (int)Math.Truncate(consumedY);
+            _remX = consumedX - ix; _remY = consumedY - iy;
+            _pendX = totalX - consumedX; _pendY = totalY - consumedY;
+            DbgPendX = _pendX; DbgRemX = _remX; DbgInRate = _inRate; DbgBudget = budget;
+            Volatile.Write(ref PumpHeartbeat, now);
         }
-        if (ix != 0 || iy != 0) Mouse(ix, iy, MOUSEEVENTF_MOVE);
+        if (ix != 0 || iy != 0)
+        {
+            Mouse(ix, iy, MOUSEEVENTF_MOVE);
+            AuditInjectedPx += Math.Max(Math.Abs(ix), Math.Abs(iy));
+            AuditInjectedCount++;
+            InjectStamps.Enqueue(Stopwatch.GetTimestamp());
+            InjectMag.Enqueue(Math.Max(Math.Abs(ix), Math.Abs(iy)));
+            while (InjectStamps.Count > 256) { InjectStamps.TryDequeue(out _); InjectMag.TryDequeue(out _); }
+        }
     }
 
     public static void MouseClick(string btn, int count = 1)
