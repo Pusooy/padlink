@@ -12,7 +12,9 @@ public static class Log
     public static void Info(string message) => Write("INFO", message);
     public static void Warn(string message) => Write("WARN", message);
     public static void Error(string message, Exception? ex = null)
-        => Write("ERR ", ex == null ? message : $"{message} :: {ex.GetType().Name}: {ex.Message}");
+        => Write("ERR ", ex == null
+            ? message
+            : $"{message} :: {ex.GetType().Name}: {ex.Message}\n{ex.StackTrace}");
 
     private static void Write(string level, string message)
     {
