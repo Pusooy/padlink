@@ -12,6 +12,9 @@ namespace PadLink.App;
 
 public sealed partial class MainWindow : Window
 {
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern uint GetDpiForWindow(IntPtr hwnd);
+
     private readonly PadLinkSettings _settings;
     private readonly ShellViewModel _vm;
     private bool _reallyClose;
@@ -35,13 +38,17 @@ public sealed partial class MainWindow : Window
 
         ContentFrame.Navigate(typeof(OverviewPage), _vm);
 
-        // 窗口尺寸
+        // 窗口尺寸：AppWindow.Resize 是物理像素。DPI 清单生效后（如 4K 200%）
+        // 必须按 GetDpiForWindow 换算，否则逻辑尺寸缩水一半，布局走错分支
+        // 且隐藏窗口的 0 尺寸测量趟会在 XAML 布局里触发除零（0xC000027B）。
         try
         {
             var hwnd = WindowNative.GetWindowHandle(this);
             var id = Win32Interop.GetWindowIdFromWindow(hwnd);
             var appWindow = AppWindow.GetFromWindowId(id);
-            appWindow.Resize(new Windows.Graphics.SizeInt32(1180, 800));
+            double scale = GetDpiForWindow(hwnd) / 96.0;
+            appWindow.Resize(new Windows.Graphics.SizeInt32(
+                (int)Math.Round(1180 * scale), (int)Math.Round(800 * scale)));
         }
         catch (Exception ex) { Log.Error("窗口尺寸设置失败", ex); }
 
