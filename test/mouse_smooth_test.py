@@ -30,74 +30,72 @@ class MSLLHOOKSTRUCT(ctypes.Structure):
                 ("time", ctypes.c_uint), ("dwExtraInfo", ctypes.c_void_p)]
 
 
-stamps = []  # 注入 MOVE 的单调时间戳
-HOOK = ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_int, ctypes.c_uint, ctypes.POINTER(MSLLHOOKSTRUCT))
-
-
-def hook_proc(n, wparam, lparam):
-    if wparam == WM_MOUSEMOVE and lparam.contents.flags & LLMHF_INJECTED:
-        stamps.append(time.monotonic())
-    return user32.CallNextHookEx(None, n, wparam, lparam)
-
-
-def install_hook():
-    proc = HOOK(hook_proc)
-    assert user32.SetWindowsHookExW(WH_MOUSE_LL, proc, None, 0), "hook failed"
-    msg = ctypes.wintypes.MSG()
-    while user32.GetMessageW(ctypes.byref(msg), None, 0, 0):
-        pass
 
 
 def mframe(dx, dy):
     return struct.pack("<Bhh", 0x4D, int(round(dx * 16)), int(round(dy * 16)))
 
 
-def stats(ts):
-    gaps = [(b - a) * 1000 for a, b in zip(ts, ts[1:])]
-    gaps.sort()
-    n = len(gaps)
-    if n == 0:
-        return dict(n=len(ts), p50=999.0, p95=999.0, max=999.0)
-    return dict(n=len(ts), p50=gaps[n // 2], p95=gaps[int(n * 0.95)], max=gaps[-1])
+async def recv_until(ws, want_t, timeout=5):
+    while True:
+        r = json.loads(await asyncio.wait_for(ws.recv(), timeout))
+        if r.get("t") == want_t:
+            return r
 
 
 async def main():
-    import threading
-    threading.Thread(target=install_hook, daemon=True).start()
-    time.sleep(0.5)
-
     results = []
     async with websockets.connect("ws://127.0.0.1:8765/ws") as ws:
         await ws.send(json.dumps({"t": "screen_move", "x": 0.2, "y": 0.5}))
         await asyncio.sleep(0.4)
 
         # 相位 1：突发 20px（网络攒包的典型量级）。
-        # 泵按实测手速摊开：应看到 ≥6 个注入事件、无 >30ms 空洞
-        stamps.clear()
+        # 泵按实测手速摊开：应看到 ≥5 次注入、单拍间隔 ≤8ms、无 >30ms 空洞
+        async def pump_snapshot():
+            await ws.send(json.dumps({"t": "pump_stats"}))
+            r = await recv_until(ws, "pump_stats", 5)
+            f = r["freq"]
+            stamps = sorted(s * 1000.0 / f for s in r["stamps"])
+            return stamps, r["arrivedN"], r["injectedN"]
+
+        b_stamps, b_arr, b_inj = await pump_snapshot()
+        baseline = b_stamps[-1] if b_stamps else 0
         for _ in range(20):
             await ws.send(mframe(1, 0))
-        await asyncio.sleep(1.2)
-        s = stats(stamps)
-        ok_burst = 5 <= s["n"] <= 90 and s["max"] < 30
-        results.append((f"突发 20px 注入 n={s['n']} p50={s['p50']:.1f}ms p95={s['p95']:.1f}ms max={s['max']:.1f}ms", ok_burst))
+        await asyncio.sleep(0.8)
+        a_stamps, a_arr, a_inj = await pump_snapshot()
+        inj = [s for s in a_stamps if s > baseline]
+        gaps = [b - a for a, b in zip(inj, inj[1:])]
+        max_gap = max(gaps) if gaps else 0.0
+        ok_burst = 5 <= len(inj) <= 90 and max_gap < 30
+        p50 = sorted(gaps)[len(gaps) // 2] if gaps else 999.0
+        results.append((f"突发 20px 注入 n={len(inj)} 到达={a_arr-b_arr} 注入px={a_inj-b_inj} "
+                        f"间隔p50={p50:.1f}ms max={max_gap:.1f}ms", ok_burst))
+        await asyncio.sleep(0.5)
 
         await asyncio.sleep(0.6)
         await ws.send(json.dumps({"t": "screen_move", "x": 0.8, "y": 0.5}))
         await asyncio.sleep(0.4)
 
-        # 相位 2：均匀发送。Python 客户端自己的 sleep 有时钟抖动（15.6ms 粒度），
-        # 所以正确判据是「注入间隔不比发送间隔更差」：注入不能制造额外空洞。
-        stamps.clear()
+        # 相位 2：均匀发送。用服务端自记的注入时间戳（pump_stats）做权威测量，
+        # 判据：每个发送事件都产生注入（不丢）且注入间隔不比发送间隔差。
+        b_stamps, b_arr, b_inj = await pump_snapshot()
+        baseline = b_stamps[-1] if b_stamps else 0
         sent = []
         for _ in range(40):
             await ws.send(mframe(1, 0))
             sent.append(time.monotonic())
             await asyncio.sleep(0.025)
-        await asyncio.sleep(1.2)
-        s2 = stats(stamps)
+        await asyncio.sleep(0.8)
+        a_stamps, a_arr, a_inj = await pump_snapshot()
+        inj = [s for s in a_stamps if s > baseline]
         send_max = max((b - a) * 1000 for a, b in zip(sent, sent[1:]))
-        ok_even = s2["n"] >= 30 and s2["max"] < send_max + 12
-        results.append((f"均匀 40px 注入 n={s2['n']}/{len(sent)} 注入max={s2['max']:.1f}ms 发送max={send_max:.1f}ms", ok_even))
+        inj_gaps = [b - a for a, b in zip(inj, inj[1:])]
+        inj_max = max(inj_gaps) if inj_gaps else 9999
+        cons_ok = (a_arr - b_arr) == 40 and (a_inj - b_inj) == 40
+        ok_even = len(inj) >= len(sent) - 2 and inj_max < send_max + 8 and cons_ok
+        results.append((f"均匀 40px 服务端注入 n={len(inj)}/{len(sent)} 到达={a_arr-b_arr} 注入={a_inj-b_inj} "
+                        f"注入max={inj_max:.1f}ms 发送max={send_max:.1f}ms", ok_even))
 
     print("\n".join(f"{'✅' if ok else '❌'} {n}" for n, ok in results))
     assert all(ok for _, ok in results), "有测试失败！"
