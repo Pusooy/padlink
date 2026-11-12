@@ -1065,7 +1065,7 @@ $("appSearch").addEventListener("input",function(){applyAppFilter(this.value)});
 var screenTimer=null, screenAuto=false;
 function loadScreen(){
   var wrap=$("screenWrap"), img=$("screenImg");
-  var url="/screen?w=1280&q=70&t="+Date.now();
+  var url="/screen?w=2400&q=85&t="+Date.now();
   var pre=new Image();
   pre.onload=function(){
     img.src=url; wrap.classList.add("live");
