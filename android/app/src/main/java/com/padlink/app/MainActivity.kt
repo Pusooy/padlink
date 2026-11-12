@@ -91,6 +91,28 @@ class MainActivity : android.app.Activity() {
     private var host = ""
     private var pingJob: Runnable? = null
 
+    /** WiFi 低延迟锁：无线网卡的省电模式（PSM）会在包间隙打盹，造成 20-100ms 的
+     *  随机收发延迟——这正是「偶尔一点点卡顿」的经典来源。连接期间持锁禁用省电。 */
+    private var wifiLock: android.net.wifi.WifiManager.WifiLock? = null
+
+    private fun acquireWifiLock() {
+        if (wifiLock != null) return
+        try {
+            val wm = applicationContext.getSystemService(Context.WIFI_SERVICE) as android.net.wifi.WifiManager
+            val mode = if (Build.VERSION.SDK_INT >= 29) android.net.wifi.WifiManager.WIFI_MODE_FULL_LOW_LATENCY
+            else @Suppress("DEPRECATION") android.net.wifi.WifiManager.WIFI_MODE_FULL_HIGH_PERF
+            wifiLock = wm.createWifiLock(mode, "PadLink:latency").apply {
+                setReferenceCounted(false)
+                acquire()
+            }
+        } catch (_: Throwable) { }
+    }
+
+    private fun releaseWifiLock() {
+        try { wifiLock?.release() } catch (_: Throwable) { }
+        wifiLock = null
+    }
+
     private var sens = 1.6f
     private var scrollSpd = 2f
     private var vibOn = true
@@ -159,6 +181,7 @@ class MainActivity : android.app.Activity() {
 
     override fun onDestroy() {
         pingJob?.let { handler.removeCallbacks(it) }
+        releaseWifiLock()
         try { ws?.close(1000, null) } catch (_: Exception) {}
         super.onDestroy()
     }
@@ -1289,6 +1312,7 @@ class MainActivity : android.app.Activity() {
                     connected = true
                     host = target
                     saveStr("host", target)
+                    acquireWifiLock()
                     connectPage.visibility = View.GONE
                     appRoot.visibility = View.VISIBLE
                     statusDot.setTextColor(C_OK)
@@ -1309,6 +1333,7 @@ class MainActivity : android.app.Activity() {
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                 runOnUiThread {
                     connected = false
+                    releaseWifiLock()
                     stopPing()
                     statusDot.setTextColor(C_DANGER)
                     if (appRoot.visibility == View.VISIBLE) {
@@ -1324,7 +1349,7 @@ class MainActivity : android.app.Activity() {
             }
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
-                runOnUiThread { connected = false; stopPing() }
+                runOnUiThread { connected = false; releaseWifiLock(); stopPing() }
             }
         })
     }
@@ -1473,6 +1498,15 @@ class MainActivity : android.app.Activity() {
         private var dragHeld = false
         private var longPressFired = false
 
+        /** 单个采样点 → 相对位移即时出站（亚像素精度靠协议 ×16 定点保留）。 */
+        private fun emitDelta(x: Float, y: Float) {
+            val l = last ?: return
+            val dx = (x - l.first) * sens
+            val dy = (y - l.second) * sens
+            if (dx != 0f || dy != 0f) sendMove(dx.toDouble(), dy.toDouble())
+            last = x to y
+        }
+
         // 低延迟关键：每条 MOVE 事件即时出站，绝不攒帧。
         // 攒帧策略（Choreographer/rAF）最多引入 +16ms——体感明显，已全部移除。
         // 亚像素精度靠协议里的 ×16 定点数 + 服务端余量累积，不会因 <1px 而丢移动。
@@ -1518,13 +1552,12 @@ class MainActivity : android.app.Activity() {
                             val x = e.getX(i)
                             val y = e.getY(i)
                             if (abs(x - p.sx) > tapDist || abs(y - p.sy) > tapDist) p.moved = true
-                            val l = last
-                            if (l != null) {
-                                val dx = (x - l.first) * sens
-                                val dy = (y - l.second) * sens
-                                if (dx != 0f || dy != 0f) sendMove(dx.toDouble(), dy.toDouble())
+                            // 高采样率触摸屏（120/240Hz）在单个事件里会带多个历史采样点，
+                            // 全部逐点送出 → 服务端泵拿到更均匀的时间分布，手感更连续
+                            for (h in 0 until e.historySize) {
+                                emitDelta(e.getHistoricalX(i, h), e.getHistoricalY(i, h))
                             }
-                            last = x to y
+                            emitDelta(x, y)
                         }
                     } else if (ids.size >= 2) {
                         val ref = scrollRef
