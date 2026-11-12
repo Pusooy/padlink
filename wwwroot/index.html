@@ -1,0 +1,1342 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="PadLink">
+<meta name="theme-color" content="#0a0b0f">
+<link rel="manifest" href="/static/manifest.json">
+<link rel="apple-touch-icon" href="/static/icon.png">
+<script src="/static/lucide.min.js"></script>
+<title>PadLink</title>
+<style>
+:root{
+  --bg:#f4f5f7;--surface:#fff;--surface2:#eceef2;--pad:#e9ebf0;--padEdge:#dcdfe6;
+  --text:#15171c;--text2:#6b7280;--text3:#9aa0ab;--line:#e3e5ea;
+  --accent:#2f6bff;--accentInk:#fff;--accentSoft:#2f6bff1a;
+  --ok:#16a34a;--danger:#dc2626;
+  --shadow:0 1px 2px #0f172a0a,0 8px 24px #0f172a12;--r:16px;
+}
+[data-theme="dark"]{
+  --bg:#0a0b0f;--surface:#13151b;--surface2:#1c1f28;--pad:#0f1117;--padEdge:#242836;
+  --text:#eceef4;--text2:#9aa3b2;--text3:#626a78;--line:#232633;
+  --accent:#5b8cff;--accentInk:#fff;--accentSoft:#5b8cff28;
+  --ok:#3ddc97;--danger:#ff6b6b;
+  --shadow:0 1px 2px #0006,0 10px 30px #0008;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);
+ font-family:-apple-system,"SF Pro Text","PingFang SC","Segoe UI","Microsoft YaHei",sans-serif;
+ user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;touch-action:none;overscroll-behavior:none}
+button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
+svg.lucide{width:20px;height:20px;stroke-width:2.1}
+
+#app{position:fixed;inset:0;display:none;flex-direction:column;
+ padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+
+/* 状态条 */
+#statusbar{display:flex;align-items:center;gap:7px;padding:7px 12px 3px;font-size:11.5px;color:var(--text3);flex-shrink:0}
+#dot{width:7px;height:7px;border-radius:50%;background:var(--danger);flex-shrink:0;transition:.3s}
+#dot.on{background:var(--ok);box-shadow:0 0 7px var(--ok)}
+#statusText{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#statusbar .mini{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:9px;color:var(--text2)}
+#statusbar .mini:active{background:var(--surface2)}
+
+/* 工作区 */
+#workspace{flex:1;position:relative;min-height:0;padding:0 10px}
+.page{position:absolute;inset:0;padding:0 0 8px;display:none;flex-direction:column}
+.page.active{display:flex}
+
+/* 触控板页 */
+#padPage .padWrap{flex:1;position:relative;min-height:0}
+#pad{position:absolute;inset:0;border-radius:var(--r);background:var(--pad);
+ border:1px solid var(--padEdge);box-shadow:var(--shadow);overflow:hidden}
+#padHint{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+ gap:9px;color:var(--text3);font-size:13px;line-height:1.85;text-align:center;pointer-events:none;
+ transition:opacity .45s;opacity:.8}
+#padHint.dim{opacity:0}
+#padHint .k{display:inline-flex;align-items:center;gap:6px;color:var(--text2)}
+#padHint .k svg.lucide{width:16px;height:16px}
+.ripple{position:absolute;width:14px;height:14px;margin:-7px 0 0 -7px;border-radius:50%;
+ background:var(--accent);opacity:.35;pointer-events:none;animation:rip .34s ease-out forwards}
+@keyframes rip{to{transform:scale(3.6);opacity:0}}
+#quickCol{position:absolute;right:8px;top:8px;display:flex;flex-direction:column;gap:6px;z-index:3}
+#quickCol button{width:42px;height:42px;border-radius:13px;background:var(--surface);
+ border:1px solid var(--line);color:var(--text2);display:flex;align-items:center;justify-content:center;
+ box-shadow:var(--shadow);transition:transform .12s}
+#quickCol button:active{transform:scale(.9);background:var(--accentSoft);color:var(--accent);border-color:var(--accent)}
+
+/* 键盘页（蓝牙键盘语义：逐键 VK 直发，PC 输入法组字，无任何缓冲显示） */
+#voiceBtn{position:absolute;right:14px;top:2px;z-index:5;width:42px;height:42px;border-radius:13px;
+ border:1px solid var(--line);background:var(--surface);color:var(--text2);display:flex;align-items:center;
+ justify-content:center;transition:.15s;box-shadow:var(--shadow)}
+#voiceBtn:active{background:var(--accentSoft);border-color:var(--accent);color:var(--accent)}
+#voiceBtn.listening{background:var(--accentSoft);border-color:var(--accent);color:var(--accent);
+ box-shadow:0 0 0 3px var(--accentSoft)}
+#kbPage{gap:0;padding-top:2px}
+#kbGrid{flex:1;display:flex;flex-direction:column;gap:4px;min-height:0;overflow:hidden}
+.krow{display:flex;gap:4px;flex:1;min-height:0}
+.key{flex:1;border-radius:10px;background:var(--surface);border:1px solid var(--line);
+ display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.06;
+ font-size:15px;font-weight:600;color:var(--text);transition:background .1s,transform .06s;
+ min-height:0;overflow:hidden}
+.key.fn{font-size:10px;font-weight:600;color:var(--text2)}
+.key.w15{flex:1.5}.key.w2{flex:2}.key.w25{flex:2.4}.key.w55{flex:5.5}.key.ico{flex:.8}
+.key.alt{color:var(--text2);font-weight:600}
+.key.hold{background:var(--surface2);border-color:var(--accent);color:var(--accent);transform:scale(.97)}
+.key.on{background:var(--accentSoft);border-color:var(--accent);color:var(--accent)}
+
+/* 媒体页 */
+#mediaPage{gap:10px;padding-top:8px;overflow-y:auto}
+.mediaCard{border-radius:var(--r);background:var(--surface);border:1px solid var(--line);
+ box-shadow:var(--shadow);padding:14px;flex-shrink:0}
+.mediaCard h4{font-size:11.5px;font-weight:600;color:var(--text3);letter-spacing:.4px;
+ text-transform:uppercase;margin-bottom:11px;display:flex;align-items:center;gap:6px}
+.mediaCard h4 svg.lucide{width:14px;height:14px}
+.transport{display:flex;align-items:center;justify-content:space-around;gap:8px}
+.transport button{width:50px;height:50px;border-radius:16px;background:var(--surface2);
+ display:flex;align-items:center;justify-content:center;color:var(--text);transition:transform .1s}
+.transport button:active{transform:scale(.9)}
+.transport button.primary{width:62px;height:62px;border-radius:20px;background:var(--accent);color:var(--accentInk)}
+.transport button svg.lucide{width:23px;height:23px}
+.transport button.primary svg.lucide{width:27px;height:27px}
+.chipRow{display:flex;gap:8px;flex-wrap:wrap}
+.chip{padding:9px 15px;border-radius:999px;background:var(--surface2);border:1px solid var(--line);
+ font-size:13px;color:var(--text);transition:transform .1s;display:inline-flex;align-items:center;gap:6px}
+.chip:active{transform:scale(.95);background:var(--accentSoft);border-color:var(--accent);color:var(--accent)}
+.chip svg.lucide{width:15px;height:15px}
+
+/* 音量滑块 */
+.volRow{display:flex;align-items:center;gap:12px}
+.volRow .ico{color:var(--text2);display:flex;flex-shrink:0}
+.volRow .ico svg.lucide{width:20px;height:20px}
+.volRow input[type=range]{flex:1;accent-color:var(--accent);height:26px}
+.volRow .num{width:38px;text-align:right;font-size:13px;color:var(--text2);font-variant-numeric:tabular-nums}
+.volRow .muteBtn{width:38px;height:38px;border-radius:11px;background:var(--surface2);
+ display:flex;align-items:center;justify-content:center;color:var(--text2)}
+.volRow .muteBtn.off{color:var(--danger);background:var(--accentSoft)}
+
+/* 应用页 */
+#appsPage{padding-top:6px;overflow-y:auto}
+.secTitle{font-size:11.5px;font-weight:600;color:var(--text3);letter-spacing:.4px;
+ text-transform:uppercase;margin:10px 2px 9px;display:flex;align-items:center;gap:6px;flex-shrink:0}
+.secTitle .act{margin-left:auto;font-size:12px;color:var(--accent);text-transform:none;letter-spacing:0}
+.searchWrap{position:relative;flex-shrink:0;margin-bottom:4px}
+.searchWrap .sIco{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text3);pointer-events:none}
+.searchWrap .sIco svg.lucide{width:16px;height:16px}
+#appSearch{width:100%;padding:11px 13px 11px 36px;font-size:14.5px;border-radius:12px;
+ border:1px solid var(--line);background:var(--surface);color:var(--text);outline:none}
+#appSearch:focus{border-color:var(--accent)}
+.appGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(78px,1fr));gap:9px}
+.appTile{display:flex;flex-direction:column;align-items:center;gap:7px;padding:13px 5px 10px;
+ border-radius:14px;background:var(--surface);border:1px solid var(--line);transition:transform .1s}
+.appTile:active{transform:scale(.94);border-color:var(--accent)}
+.appTile img,.appTile .ph{width:38px;height:38px;border-radius:10px;object-fit:contain}
+.appTile .ph{display:flex;align-items:center;justify-content:center;background:var(--surface2);color:var(--text2)}
+.appTile span{font-size:11.5px;color:var(--text2);text-align:center;line-height:1.25;
+ max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.winList{display:flex;flex-direction:column;gap:7px}
+.winRow{display:flex;align-items:center;gap:10px;padding:9px 11px;border-radius:13px;
+ background:var(--surface);border:1px solid var(--line)}
+.winRow img,.winRow .ph{width:26px;height:26px;border-radius:7px;flex-shrink:0;object-fit:contain}
+.winRow .ph{display:flex;align-items:center;justify-content:center;background:var(--surface2);color:var(--text2)}
+.winRow .t{flex:1;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.winRow .badge{font-size:10px;padding:2.5px 8px;border-radius:99px;background:var(--ok);color:#fff;flex-shrink:0}
+.winRow .ic{width:30px;height:30px;border-radius:9px;display:flex;align-items:center;justify-content:center;
+ color:var(--text2);flex-shrink:0}
+.winRow .ic:active{background:var(--surface2)}
+.winRow .ic.danger{color:var(--danger)}
+.winRow .ic svg.lucide{width:17px;height:17px}
+
+/* 设置页 */
+#setPage{padding-top:6px;overflow-y:auto}
+.setGroup{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);
+ box-shadow:var(--shadow);margin-bottom:10px;overflow:hidden;flex-shrink:0}
+.setGroup .h{font-size:11.5px;font-weight:600;color:var(--text3);letter-spacing:.4px;
+ text-transform:uppercase;padding:12px 14px 4px}
+.setItem{display:flex;align-items:center;gap:11px;padding:11px 14px;font-size:14px}
+.setItem+.setItem{border-top:1px solid var(--line)}
+.setItem .lab{flex:1;color:var(--text)}
+.setItem .sub{display:block;font-size:11.5px;color:var(--text3);margin-top:2px}
+.setItem input[type=range]{width:120px;accent-color:var(--accent)}
+.setItem .val{width:34px;text-align:right;font-size:12.5px;color:var(--text2);font-variant-numeric:tabular-nums}
+.switch{width:46px;height:27px;border-radius:99px;background:var(--surface2);border:1px solid var(--line);
+ position:relative;transition:.22s;flex-shrink:0}
+.switch::after{content:"";position:absolute;top:2px;left:2px;width:21px;height:21px;border-radius:50%;
+ background:#fff;box-shadow:0 1px 3px #0003;transition:.22s}
+.switch.on{background:var(--accent);border-color:var(--accent)}
+.switch.on::after{left:23px}
+.segRow{display:flex;gap:3px;background:var(--surface2);border-radius:10px;padding:3px}
+.segRow button{padding:6px 12px;border-radius:8px;font-size:12.5px;color:var(--text2)}
+.segRow button.on{background:var(--surface);color:var(--text);box-shadow:0 1px 2px #0002}
+
+/* 屏幕页 */
+#screenPage{padding-top:6px;gap:8px}
+.screenBar{display:flex;align-items:center;gap:8px;flex-shrink:0}
+.screenInfo{margin-left:auto;font-size:11.5px;color:var(--text3)}
+#screenWrap{flex:1;position:relative;min-height:0;border-radius:var(--r);overflow:hidden;
+ background:#000;border:1px solid var(--line);display:flex;align-items:center;justify-content:center}
+#screenImg{max-width:100%;max-height:100%;object-fit:contain;display:none;cursor:crosshair}
+#screenTip{color:var(--text3);font-size:13px}
+#screenWrap.live #screenImg{display:block}
+#screenWrap.live #screenTip{display:none}
+.screenRipple{position:absolute;width:22px;height:22px;margin:-11px 0 0 -11px;border-radius:50%;
+ border:2px solid var(--accent);opacity:.9;pointer-events:none;animation:srip .5s ease-out forwards}
+@keyframes srip{to{transform:scale(2.6);opacity:0}}
+
+/* 文件页 */
+#filesPage{padding-top:6px;gap:8px}
+.fileBar{display:flex;align-items:center;gap:8px;flex-shrink:0}
+.fNav{width:38px;height:38px;border-radius:11px;background:var(--surface);border:1px solid var(--line);
+ display:flex;align-items:center;justify-content:center;color:var(--text2);flex-shrink:0}
+.fNav:active{background:var(--accentSoft);color:var(--accent)}
+.fNav svg.lucide{width:18px;height:18px}
+.filePath{flex:1;font-size:12.5px;color:var(--text2);white-space:nowrap;overflow:hidden;
+ text-overflow:ellipsis;background:var(--surface);border:1px solid var(--line);border-radius:11px;
+ padding:10px 12px}
+.fileList{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:6px;min-height:0}
+.fItem{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:12px;
+ background:var(--surface);border:1px solid var(--line)}
+.fItem:active{background:var(--accentSoft)}
+.fItem .fi{width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;
+ background:var(--surface2);color:var(--text2);flex-shrink:0}
+.fItem .fi svg.lucide{width:17px;height:17px}
+.fItem .fn{flex:1;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fItem .fs{font-size:11px;color:var(--text3);flex-shrink:0}
+.fItem .fx{width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;
+ color:var(--text3);flex-shrink:0}
+.filePreview{position:absolute;inset:0;background:var(--bg);z-index:6;display:flex;flex-direction:column;
+ padding:0 0 8px}
+.pvHead{display:flex;align-items:center;gap:10px;padding:0 0 8px;flex-shrink:0}
+.pvName{flex:1;font-size:13.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pvBody{flex:1;overflow:auto;border-radius:var(--r);background:var(--surface);
+ border:1px solid var(--line);padding:12px;font-size:13px;line-height:1.6;white-space:pre-wrap;
+ word-break:break-word;font-family:ui-monospace,Menlo,Consolas,monospace}
+.pvBody img{max-width:100%;border-radius:10px;display:block;margin:0 auto}
+.pvBody video,.pvBody audio{max-width:100%;border-radius:10px;display:block;margin:0 auto}
+
+/* Dock */
+#dock{flex-shrink:0;display:flex;align-items:stretch;gap:2px;padding:5px 8px calc(5px + env(safe-area-inset-bottom));
+ background:var(--surface);border-top:1px solid var(--line);position:relative;z-index:10}
+.dockBtn{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
+ padding:7px 2px;border-radius:12px;color:var(--text3);font-size:10px;transition:.15s}
+.dockBtn svg.lucide{width:21px;height:21px}
+.dockBtn.on{color:var(--accent);background:var(--accentSoft)}
+.dockBtn:active{transform:scale(.94)}
+
+/* 连接页 */
+#connect{position:fixed;inset:0;z-index:50;display:flex;flex-direction:column;align-items:center;
+ justify-content:center;gap:13px;padding:0 30px;background:var(--bg)}
+.brand{display:flex;flex-direction:column;align-items:center;gap:9px;margin-bottom:4px}
+.brand .logo{width:64px;height:64px;border-radius:20px;background:var(--accent);
+ display:flex;align-items:center;justify-content:center;color:#fff;box-shadow:0 8px 24px var(--accentSoft)}
+.brand .logo svg.lucide{width:33px;height:33px}
+#connect h1{font-size:25px;font-weight:700;letter-spacing:-.4px}
+#connect .sub{font-size:13px;color:var(--text2);text-align:center;line-height:1.75}
+#ipin{width:100%;max-width:330px;padding:13px 15px;font-size:16px;text-align:center;border-radius:13px;
+ border:1px solid var(--line);background:var(--surface);color:var(--text);outline:none}
+#ipin:focus{border-color:var(--accent)}
+#connectBtn{width:100%;max-width:330px;padding:14px;border-radius:13px;background:var(--accent);
+ color:var(--accentInk);font-size:16px;font-weight:600;box-shadow:0 6px 18px var(--accentSoft)}
+#connectBtn:active{opacity:.86}
+#scanBtn{color:var(--accent);font-size:13px;display:inline-flex;align-items:center;gap:5px}
+#scanBtn svg.lucide{width:16px;height:16px}
+#scanStatus{font-size:12px;color:var(--text3);min-height:15px;text-align:center}
+#recentBox{width:100%;max-width:330px;display:flex;flex-direction:column;gap:6px}
+#recentBox .row{display:flex;align-items:center;gap:9px;padding:11px 13px;border-radius:12px;
+ background:var(--surface);border:1px solid var(--line);font-size:14px;width:100%}
+#recentBox .row .t{flex:1;text-align:left}
+#recentBox .row svg.lucide{width:16px;height:16px;color:var(--text3)}
+
+#toast{position:fixed;left:50%;bottom:88px;transform:translateX(-50%) translateY(8px);
+ background:#111a;color:#fff;padding:9px 16px;border-radius:11px;font-size:13px;z-index:99;
+ opacity:0;transition:.26s;pointer-events:none;max-width:82vw;text-align:center;backdrop-filter:blur(8px)}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+@media (min-width:760px){
+ #app{max-width:900px;margin:0 auto;border-left:1px solid var(--line);border-right:1px solid var(--line)}
+ .appGrid{grid-template-columns:repeat(auto-fill,minmax(92px,1fr))}
+}
+@media (orientation:landscape) and (max-height:540px){
+ .dockBtn{font-size:0;gap:0;padding:9px 2px}
+ .dockBtn svg.lucide{width:22px;height:22px}
+ #statusbar{padding:4px 12px 0}
+ #padHint{font-size:12px;line-height:1.65;gap:6px}
+ #mediaPage{flex-direction:row;flex-wrap:wrap;align-content:flex-start}
+ .mediaCard{flex:1 1 46%}
+}
+</style>
+</head>
+<body>
+
+<!-- 连接页 -->
+<div id="connect">
+  <div class="brand">
+    <div class="logo"><i data-lucide="mouse-pointer-2"></i></div>
+    <h1>PadLink</h1>
+  </div>
+  <div class="sub">手机 → 电脑的触控板 · 键盘 · 遥控器<br>请先在电脑上运行 PadLink</div>
+  <input id="ipin" placeholder="电脑 IP，如 192.168.1.100" inputmode="decimal"
+         autocomplete="off" autocapitalize="off" spellcheck="false">
+  <button id="connectBtn">连接到电脑</button>
+  <button id="scanBtn"><i data-lucide="radar"></i>扫描局域网</button>
+  <div id="scanStatus"></div>
+  <div id="recentBox"></div>
+</div>
+
+<!-- 主体 -->
+<div id="app">
+  <div id="statusbar">
+    <div id="dot"></div>
+    <div id="statusText">未连接</div>
+    <button class="mini" id="fsBtn" title="全屏"><i data-lucide="maximize-2"></i></button>
+    <button class="mini" id="themeBtn" title="主题"><i data-lucide="moon"></i></button>
+  </div>
+
+  <div id="workspace">
+
+    <!-- 触控板 -->
+    <section class="page active" id="padPage">
+      <div class="padWrap">
+        <div id="pad">
+          <div id="padHint">
+            <div class="k"><i data-lucide="hand"></i>单指拖动 · 移动指针</div>
+            <div class="k"><i data-lucide="pointer"></i>轻点左键 · 双指轻点右键</div>
+            <div class="k"><i data-lucide="move-vertical"></i>双指上下滑动 · 滚动</div>
+          </div>
+        </div>
+        <div id="quickCol">
+          <button id="qLeft" title="左键"><i data-lucide="mouse-pointer-2"></i></button>
+          <button id="qMiddle" title="中键"><i data-lucide="circle-dot"></i></button>
+          <button id="qRight" title="右键"><i data-lucide="mouse-pointer-click"></i></button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 键盘（蓝牙键盘语义：每个按键逐键直发 PC，电脑输入法负责组字） -->
+    <section class="page" id="kbPage">
+      <button id="voiceBtn" title="语音输入中文"><i data-lucide="mic"></i></button>
+      <div id="kbGrid"></div>
+    </section>
+
+    <!-- 媒体 -->
+    <section class="page" id="mediaPage">
+      <div class="mediaCard">
+        <h4><i data-lucide="play"></i>播放</h4>
+        <div class="transport">
+          <button data-key="media_previous"><i data-lucide="skip-back"></i></button>
+          <button class="primary" data-key="media_play_pause"><i data-lucide="play"></i></button>
+          <button data-key="media_next"><i data-lucide="skip-forward"></i></button>
+          <button data-key="media_stop"><i data-lucide="square"></i></button>
+        </div>
+      </div>
+      <div class="mediaCard">
+        <h4><i data-lucide="volume-2"></i>主机音量</h4>
+        <div class="volRow">
+          <button class="muteBtn" id="muteBtn"><i data-lucide="volume-2"></i></button>
+          <input type="range" id="volSlider" min="0" max="100" step="1" value="50">
+          <div class="num" id="volNum">--</div>
+        </div>
+      </div>
+      <div class="mediaCard">
+        <h4><i data-lucide="monitor"></i>系统</h4>
+        <div class="chipRow">
+          <button class="chip" data-key="win+d"><i data-lucide="monitor"></i>显示桌面</button>
+          <button class="chip" data-key="win+tab"><i data-lucide="layout-dashboard"></i>任务视图</button>
+          <button class="chip" data-key="alt+tab"><i data-lucide="app-window"></i>切换窗口</button>
+          <button class="chip" data-key="win+l"><i data-lucide="lock"></i>锁定</button>
+          <button class="chip" data-key="printscreen"><i data-lucide="camera"></i>截屏</button>
+        </div>
+      </div>
+      <div class="mediaCard">
+        <h4><i data-lucide="power"></i>电源</h4>
+        <div class="chipRow">
+          <button class="chip" data-power="lock"><i data-lucide="lock"></i>锁定</button>
+          <button class="chip" data-power="sleep"><i data-lucide="moon"></i>睡眠</button>
+          <button class="chip" data-power="signout"><i data-lucide="log-out"></i>注销</button>
+          <button class="chip" data-power="restart">重启</button>
+          <button class="chip" data-power="shutdown" style="color:var(--danger)">关机</button>
+        </div>
+      </div>
+      <div class="mediaCard">
+        <h4><i data-lucide="clipboard"></i>剪贴板</h4>
+        <div class="volRow" style="gap:8px">
+          <button class="chip" id="clipGet" style="flex-shrink:0"><i data-lucide="download"></i>取电脑</button>
+          <button class="chip" id="clipSend" style="flex-shrink:0"><i data-lucide="upload"></i>发到电脑</button>
+          <button class="chip" id="clipPaste" style="flex-shrink:0"><i data-lucide="clipboard-paste"></i>粘贴</button>
+        </div>
+        <textarea id="clipArea" placeholder="剪贴板内容（可编辑后发送）" style="margin-top:9px;width:100%;height:88px;
+         border-radius:11px;border:1px solid var(--line);background:var(--surface2);color:var(--text);
+         font-size:13px;padding:10px;resize:none;outline:none;font-family:inherit"></textarea>
+      </div>
+      <div class="mediaCard">
+        <h4><i data-lucide="activity"></i>主机状态</h4>
+        <div class="chipRow" id="sysInfo"><span style="color:var(--text3);font-size:12.5px">打开媒体页自动获取</span></div>
+      </div>
+      <div class="mediaCard">
+        <h4><i data-lucide="clipboard"></i>编辑</h4>
+        <div class="chipRow">
+          <button class="chip" data-key="ctrl+c">复制</button>
+          <button class="chip" data-key="ctrl+v">粘贴</button>
+          <button class="chip" data-key="ctrl+x">剪切</button>
+          <button class="chip" data-key="ctrl+z">撤销</button>
+          <button class="chip" data-key="ctrl+a">全选</button>
+          <button class="chip" data-key="ctrl+s">保存</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 应用 -->
+    <section class="page" id="appsPage">
+      <div class="secTitle">已打开窗口
+        <button class="act" id="winRefresh">刷新</button>
+      </div>
+      <div class="winList" id="winList"></div>
+      <div class="secTitle" style="margin-top:16px">搜索程序</div>
+      <div class="searchWrap">
+        <span class="sIco"><i data-lucide="search"></i></span>
+        <input id="appSearch" placeholder="输入程序名，如 notepad / 微信 / chrome"
+               autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false">
+      </div>
+      <div class="appGrid" id="appGrid" style="margin-top:9px"></div>
+    </section>
+
+
+    <!-- 屏幕 -->
+    <section class="page" id="screenPage">
+      <div class="screenBar">
+        <button class="chip" id="screenRefresh"><i data-lucide="refresh-cw"></i>刷新</button>
+        <button class="chip" id="screenAuto"><i data-lucide="radio"></i>自动</button>
+        <span class="screenInfo" id="screenInfo">点按画面 = 点击该位置</span>
+      </div>
+      <div id="screenWrap">
+        <img id="screenImg" alt="">
+        <div id="screenTip">点「刷新」获取电脑屏幕</div>
+      </div>
+    </section>
+
+    <!-- 文件 -->
+    <section class="page" id="filesPage">
+      <div class="fileBar">
+        <button class="fNav" id="fileUp"><i data-lucide="arrow-up"></i></button>
+        <div class="filePath" id="filePath">选择位置</div>
+        <button class="fNav" id="fileUploadBtn"><i data-lucide="upload"></i></button>
+      </div>
+      <input type="file" id="fileInput" style="display:none" multiple>
+      <div class="fileList" id="fileList"></div>
+      <div class="filePreview" id="filePreview" style="display:none">
+        <div class="pvHead">
+          <div class="pvName" id="pvName"></div>
+          <button class="fNav" id="pvClose"><i data-lucide="x"></i></button>
+        </div>
+        <div class="pvBody" id="pvBody"></div>
+      </div>
+    </section>
+    <!-- 设置 -->
+    <section class="page" id="setPage">
+      <div class="setGroup">
+        <div class="h">指针</div>
+        <div class="setItem">
+          <div class="lab">移动灵敏度<span class="sub">手指滑动 → 指针位移</span></div>
+          <input type="range" id="sensSlider" min="0.8" max="3" step="0.1">
+          <div class="val" id="sensVal"></div>
+        </div>
+        <div class="setItem">
+          <div class="lab">滚动速度</div>
+          <input type="range" id="scrollSlider" min="1" max="4" step="0.5">
+          <div class="val" id="scrollVal"></div>
+        </div>
+      </div>
+      <div class="setGroup">
+        <div class="h">反馈</div>
+        <div class="setItem">
+          <div class="lab">仿生震动<span class="sub">按操作类型精细调制触觉</span></div>
+          <button class="switch" id="vibSwitch"></button>
+        </div>
+        <div class="setItem">
+          <div class="lab">震动强度<span class="sub">轻 / 标准 / 强</span></div>
+          <div class="segRow" id="vibSeg">
+            <button data-vib="light">轻</button>
+            <button data-vib="normal">标准</button>
+            <button data-vib="strong">强</button>
+          </div>
+        </div>
+        <div class="setItem">
+          <div class="lab">帮助水印<span class="sub">触摸淡出，闲置后恢复</span></div>
+          <button class="switch" id="wmSwitch"></button>
+        </div>
+      </div>
+      <div class="setGroup">
+        <div class="h">外观</div>
+        <div class="setItem">
+          <div class="lab">主题</div>
+          <div class="segRow" id="themeSeg">
+            <button data-theme="light">浅色</button>
+            <button data-theme="dark">深色</button>
+            <button data-theme="auto">跟随</button>
+          </div>
+        </div>
+      </div>
+      <div class="setGroup">
+        <div class="h">连接</div>
+        <div class="setItem">
+          <div class="lab">电脑</div>
+          <div class="val" id="hostVal" style="width:auto">—</div>
+        </div>
+        <div class="setItem">
+          <div class="lab">延迟</div>
+          <div class="val" id="latVal" style="width:auto">—</div>
+        </div>
+        <div class="setItem">
+          <button class="chip" id="disconnectBtn" style="margin-left:auto;color:var(--danger)">断开连接</button>
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+  <nav id="dock">
+    <button class="dockBtn on" data-page="padPage"><i data-lucide="mouse-pointer-2"></i>触控板</button>
+    <button class="dockBtn" data-page="kbPage"><i data-lucide="keyboard"></i>键盘</button>
+    <button class="dockBtn" data-page="mediaPage"><i data-lucide="play-circle"></i>媒体</button>
+    <button class="dockBtn" data-page="appsPage"><i data-lucide="layout-grid"></i>应用</button>
+    <button class="dockBtn" data-page="screenPage"><i data-lucide="monitor-play"></i>屏幕</button>
+    <button class="dockBtn" data-page="filesPage"><i data-lucide="folder-open"></i>文件</button>
+    <button class="dockBtn" data-page="setPage"><i data-lucide="settings-2"></i>设置</button>
+  </nav>
+</div>
+
+<div id="toast"></div>
+
+<script>
+(function(){
+"use strict";
+var PORT=8765,TAP_MS=250,TAP_DIST=10;
+var $=function(id){return document.getElementById(id)};
+function icons(){try{window.lucide&&lucide.createIcons()}catch(e){}}
+function toast(m){var t=$("toast");t.textContent=m;t.classList.add("show");
+ clearTimeout(t._t);t._t=setTimeout(function(){t.classList.remove("show")},2100)}
+var LS={get:function(k,d){var v=localStorage.getItem("pl_"+k);return v===null?d:v},
+        set:function(k,v){localStorage.setItem("pl_"+k,v)}};
+
+/* ========= 仿生震动：分档 + 强度调制 =========
+   基础图案按操作语义设计：
+   - tap   轻点：极短单脉冲，模拟指尖轻触
+   - left  左键：稍长一点的确认感
+   - right 右键：双击节奏（两段），与左键区分
+   - middle 中键：三段细密，机械滚轮按下的段落感
+   - wheel 滚轮：超短刻度，配合滚动产生连续"哒哒"
+   - page  切页：快速上扬双段
+   - heavy 长按/危险：强而短的单脉冲
+*/
+var vibStrength=LS.get("vibStrength","normal");
+var STRENGTH={light:0.55,normal:1,strong:1.55};
+var VIB={
+  tap:[[9]],
+  left:[[13]],
+  right:[[8,26,8]],
+  middle:[[6,20,6,20,6]],
+  wheel:[[4]],
+  page:[[10,30,12]],
+  heavy:[[22]]
+};
+function scalePattern(pat){
+  var k=STRENGTH[vibStrength]||1;
+  // 长于 3ms 的段时长随强度变化；间隔保持，保证节奏感；强档追加 2ms 提升"实感"
+  return pat.map(function(seg){
+    if(seg>0) return Math.max(2, Math.round(seg*k) + (vibStrength==="strong"?2:0));
+    return seg;
+  });
+}
+var vibOn=LS.get("vib","on")==="on";
+function buzz(kind){
+  if(!vibOn) return;
+  var pat=VIB[kind]||VIB.tap;
+  var p=scalePattern(pat);
+  try{ navigator.vibrate && navigator.vibrate(p.length===1?p[0]:p); }catch(e){}
+}
+
+/* ========= 状态 ========= */
+var ws=null,connected=false,pingTimer=null,reconnectTimer=null;
+var host=LS.get("host","");
+var sens=parseFloat(LS.get("sens","1.6"));
+var scrollSpd=parseFloat(LS.get("scroll","2"));
+var latency=null;
+var volume=null,muted=false;
+
+/* ========= 主题 ========= */
+var themeMode=LS.get("theme","auto");
+function effTheme(){ return themeMode!=="auto"?themeMode:(matchMedia("(prefers-color-scheme: light)").matches?"light":"dark") }
+function applyTheme(){
+  var t=effTheme();
+  document.documentElement.setAttribute("data-theme",t);
+  var meta=document.querySelector('meta[name="theme-color"]');
+  if(meta) meta.content=t==="light"?"#f4f5f7":"#0d0e12";
+  $("themeBtn").innerHTML='<i data-lucide="'+(t==="dark"?"sun":"moon")+'"></i>';
+  document.querySelectorAll("#themeSeg button").forEach(function(b){
+    b.classList.toggle("on",b.dataset.theme===themeMode)});
+  icons();
+}
+matchMedia("(prefers-color-scheme: light)").addEventListener("change",function(){if(themeMode==="auto")applyTheme()});
+
+/* ========= 连接 ========= */
+function setStatus(){
+  $("dot").className=connected?"on":"";
+  var t=!connected?"未连接":(latency!==null?host+" · "+latency+"ms":host);
+  $("statusText").textContent=t;
+  $("hostVal").textContent=host||"—";
+  $("latVal").textContent=latency!==null?latency+" ms":"—";
+}
+function send(o){ if(connected&&ws&&ws.readyState===1) try{ws.send(JSON.stringify(o))}catch(e){} }
+
+/* ========= 二进制输入协议 v2（低延迟核心）=========
+   输入事件全部走二进制帧（小端定长小包），不再 rAF 攒帧：
+   攒帧最多 +16ms，蓝牙外设从不攒帧——每条事件即时出站。
+   M dx16 dy16 移动（像素×16 定点）｜ S dy16 滚轮 ｜ K vk flags 键 ｜ B btn flags 键 ｜ R 释放全部 */
+var B5=new ArrayBuffer(5),V5=new DataView(B5),B3=new ArrayBuffer(3),V3=new DataView(B3);
+var BACKPRESSURE=4096;
+function wsReady(){return connected&&ws&&ws.readyState===1}
+function i16(v){v=Math.round(v);return v<-32768?-32768:(v>32767?32767:v)|0}
+function sendMove(dx,dy){
+  if(!wsReady()||ws.bufferedAmount>BACKPRESSURE) return; // 背压时丢中间帧，下一帧事件自带新位移
+  V5.setInt8(0,0x4D);V5.setInt16(1,i16(dx*16),true);V5.setInt16(3,i16(dy*16),true);
+  try{ws.send(B5)}catch(e){}
+}
+function sendScroll(dy){
+  if(!wsReady()||ws.bufferedAmount>BACKPRESSURE) return;
+  V3.setInt8(0,0x53);V3.setInt16(1,i16(dy*16),true);
+  try{ws.send(B3)}catch(e){}
+}
+function sendKeyVk(vk,down,repeat){
+  if(!wsReady()) return;
+  V3.setInt8(0,0x4B);V3.setUint8(1,vk);V3.setUint8(2,(down?1:0)|(repeat?2:0));
+  try{ws.send(B3)}catch(e){}
+}
+function sendBtn(b,down){
+  if(!wsReady()) return;
+  V3.setInt8(0,0x42);V3.setUint8(1,b);V3.setUint8(2,down?1:0);
+  try{ws.send(B3)}catch(e){}
+}
+function sendClickB(b){sendBtn(b,true);sendBtn(b,false)}
+function sendReleaseAll(){
+  if(!wsReady()) return;
+  try{ws.send(new Uint8Array([0x52]))}catch(e){}
+}
+
+function connect(h){
+  h=(h||"").trim(); if(!h) return;
+  try{ws&&ws.close()}catch(e){}
+  clearInterval(pingTimer);clearTimeout(reconnectTimer);
+  $("statusText").textContent="正在连接 "+h+" …"; $("dot").className="";
+  ws=new WebSocket("ws://"+h+":"+PORT+"/ws");
+  ws.binaryType="arraybuffer";
+  var opened=false;
+  ws.onopen=function(){
+    opened=true;connected=true;host=h;
+    LS.set("host",h);saveRecent(h);
+    $("connect").style.display="none";$("app").style.display="flex";
+    setStatus();buzz("page");
+    sendReleaseAll(); // 清掉服务端可能残留的按住状态
+    send({t:"ping",ts:Date.now()});
+    pingTimer=setInterval(function(){send({t:"ping",ts:Date.now()})},2000);
+    send({t:"get_volume"});
+    loadApps();loadWindows();icons();
+  };
+  ws.onmessage=function(ev){
+    var m;try{m=JSON.parse(ev.data)}catch(e){return}
+    switch(m.t){
+      case "pong": latency=Math.max(0,Date.now()-m.ts);setStatus();break;
+      case "windows": renderWindows(m.list||[]);break;
+      case "apps": renderApps(m.list||[]);break;
+      case "clipboard":
+        $("clipArea").value = m.text || "";
+        toast((m.text||"").length ? "已读取电脑剪贴板" : "剪贴板为空");
+        break;
+      case "sysinfo":
+        renderSysInfo(m.info);
+        break;
+      case "volume":
+        volume=m.level|0; muted=!!m.muted;
+        $("volSlider").value=volume;
+        $("volNum").textContent=muted?"静音":volume+"%";
+        $("muteBtn").classList.toggle("off",muted);
+        break;
+    }
+  };
+  ws.onclose=function(){
+    clearInterval(pingTimer);
+    var was=connected; connected=false;latency=null;
+    if(!opened){
+      $("connect").style.display="flex";$("app").style.display="none";
+      setStatus();toast("连接失败：检查同一 WiFi / 服务端 / 防火墙");
+    }else if(was){
+      setStatus();reconnectTimer=setTimeout(function(){connect(h)},2000);
+    }
+  };
+}
+function saveRecent(h){
+  var list=JSON.parse(LS.get("recent","[]")).filter(function(x){return x!==h});
+  list.unshift(h);LS.set("recent",JSON.stringify(list.slice(0,3)));
+}
+function renderRecent(){
+  var list=JSON.parse(LS.get("recent","[]"));
+  var box=$("recentBox");box.innerHTML="";
+  list.forEach(function(h){
+    var row=document.createElement("button");row.className="row";
+    row.innerHTML='<i data-lucide="history"></i><span class="t">'+h+'</span><i data-lucide="arrow-right"></i>';
+    row.addEventListener("click",function(){$("ipin").value=h;connect(h)});
+    box.appendChild(row);
+  });
+  icons();
+}
+
+/* 局域网扫描 */
+function guessPrefix(cb){
+  try{
+    var pc=new RTCPeerConnection({iceServers:[]});pc.createDataChannel("x");
+    pc.onicecandidate=function(e){
+      if(!e.candidate){try{pc.close()}catch(_){};return}
+      var m=/(\d+\.\d+\.\d+)\.\d+/.exec(e.candidate.candidate);
+      if(m&&!/^0\./.test(m[1])){try{pc.close()}catch(_){};cb(m[1])}
+    };
+    pc.createOffer().then(function(o){return pc.setLocalDescription(o)}).catch(function(){cb(null)});
+    setTimeout(function(){cb(null)},1600);
+  }catch(e){cb(null)}
+}
+function probe(ip,ms){
+  return new Promise(function(res){
+    var done=false,ctrl=new AbortController();
+    var to=setTimeout(function(){if(!done){done=true;res(null)}},ms);
+    fetch("http://"+ip+":"+PORT+"/index.html",{signal:ctrl.signal,mode:"no-cors"})
+      .then(function(){if(!done){done=true;clearTimeout(to);res(ip)}})
+      .catch(function(){if(!done){done=true;clearTimeout(to);res(null)}});
+  });
+}
+$("scanBtn").addEventListener("click",function(){
+  var st=$("scanStatus");st.textContent="识别网段…";
+  guessPrefix(function(prefix){
+    if(!prefix) prefix="192.168."+((($("ipin").value||"").match(/^192\.168\.(\d+)\./)||[])[1]||"1");
+    st.textContent="扫描 "+prefix+".1–254 …";
+    var jobs=[];
+    for(var i=1;i<=254;i++) jobs.push(probe(prefix+"."+i,420));
+    Promise.all(jobs).then(function(found){
+      found=found.filter(Boolean);
+      if(found.length){st.textContent="找到 "+found.length+" 台";$("ipin").value=found[0];connect(found[0])}
+      else st.textContent="未发现，请手动输入 IP";
+    });
+  });
+});
+
+/* ========= Dock ========= */
+var curPage="padPage";
+document.querySelectorAll(".dockBtn").forEach(function(b){
+  b.addEventListener("click",function(){
+    document.querySelectorAll(".dockBtn").forEach(function(x){x.classList.remove("on")});
+    this.classList.add("on");
+    var page=this.dataset.page;
+    if(curPage==="kbPage"&&page!=="kbPage") releaseKeyboard();
+    curPage=page;
+    document.querySelectorAll(".page").forEach(function(p){p.classList.toggle("active",p.id===page)});
+    buzz("page");
+    if(page==="appsPage"){loadWindows();loadApps()}
+    if(page==="mediaPage"){ send({t:"get_volume"}); send({t:"get_sysinfo"}); }
+    if(page==="screenPage") loadScreen();
+    if(page==="filesPage") loadFiles(fileCwd);
+  });
+});
+/* 离开页面/锁屏时抬起所有键与按钮，杜绝幽灵状态 */
+document.addEventListener("visibilitychange",function(){if(document.hidden)sendReleaseAll()});
+window.addEventListener("pagehide",sendReleaseAll);
+
+/* ========= 全屏/主题 ========= */
+function goFullscreen(){
+  try{
+    if(!document.fullscreenElement&&document.documentElement.requestFullscreen){
+      document.documentElement.requestFullscreen().then(function(){
+        try{screen.orientation&&screen.orientation.lock&&screen.orientation.lock("landscape").catch(function(){})}catch(e){}
+      }).catch(function(){});
+    }
+  }catch(e){}
+}
+$("fsBtn").addEventListener("click",function(){
+  if(document.fullscreenElement) document.exitFullscreen(); else goFullscreen();
+});
+$("themeBtn").addEventListener("click",function(){
+  themeMode=effTheme()==="dark"?"light":"dark";LS.set("theme",themeMode);applyTheme();
+});
+
+/* ========= 触控板 ========= */
+var touches={},scrollRef=null,padLast=null,scrollAccum=0,dragHeld=false,longPressFired=false;
+var hintOn=LS.get("hint","on")==="on",hintTimer=null;
+var pad=$("pad");
+function padDim(on){$("padHint").classList.toggle("dim",on)}
+function hintBack(){clearTimeout(hintTimer);hintTimer=setTimeout(function(){if(hintOn)padDim(false)},4000)}
+function ripple(x,y){
+  var r=document.createElement("div");r.className="ripple";
+  r.style.left=x+"px";r.style.top=y+"px";
+  pad.appendChild(r);setTimeout(function(){r.remove()},360);
+}
+pad.addEventListener("touchstart",function(e){
+  e.preventDefault();
+  for(var i=0;i<e.changedTouches.length;i++){
+    var t=e.changedTouches[i];
+    touches[t.identifier]={x:t.clientX,y:t.clientY,sx:t.clientX,sy:t.clientY,st:Date.now(),moved:false};
+  }
+  var ids=Object.keys(touches);
+  if(ids.length===1){
+    padLast={x:e.changedTouches[0].clientX,y:e.changedTouches[0].clientY};
+    longPressFired=false;
+    // 长按 450ms 未移动 = 按住左键（拖拽）
+    clearTimeout(pad._lp);
+    pad._lp=setTimeout(function(){
+      var ids2=Object.keys(touches);
+      if(ids2.length!==1) return;
+      var s=touches[ids2[0]];
+      if(s&&!s.moved&&!longPressFired&&Date.now()-s.st>=430){
+        longPressFired=true;dragHeld=true;sendBtn(0,true);buzz("left");
+      }
+    },450);
+  }
+  else if(ids.length===2){padLast=null;scrollRef=e.changedTouches[0].identifier;scrollAccum=0}
+  padDim(true);clearTimeout(hintTimer);
+},{passive:false});
+pad.addEventListener("touchmove",function(e){
+  e.preventDefault();
+  var ids=Object.keys(touches);
+  if(ids.length===1){
+    var t=e.changedTouches[0],st=touches[t.identifier];
+    if(!st) return;
+    if(Math.abs(t.clientX-st.sx)>TAP_DIST||Math.abs(t.clientY-st.sy)>TAP_DIST) st.moved=true;
+    if(padLast){
+      // 即时发送：每条 touchmove 直接出站，不攒帧（攒帧最多 +16ms，体感明显）
+      // 亚像素精度由协议里的 ×16 定点数保留，慢速拖动不丢移动
+      var dx=(t.clientX-padLast.x)*sens,dy=(t.clientY-padLast.y)*sens;
+      if(dx||dy) sendMove(dx,dy);
+      padLast={x:t.clientX,y:t.clientY};
+    }
+  }else if(ids.length>=2){
+    for(var i=0;i<e.changedTouches.length;i++){
+      var t2=e.changedTouches[i];
+      if(t2.identifier!==scrollRef) continue;
+      var s2=touches[t2.identifier];if(!s2) continue;
+      s2.moved=true;
+      var dy2=(t2.clientY-s2.y)*scrollSpd;
+      if(dy2) sendScroll(dy2);
+      scrollAccum+=Math.abs(dy2);
+      if(scrollAccum>28){buzz("wheel");scrollAccum=0}
+      s2.x=t2.clientX;s2.y=t2.clientY;
+    }
+  }
+},{passive:false});
+pad.addEventListener("touchend",function(e){
+  e.preventDefault();
+  var ids=Object.keys(touches),now=Date.now();
+  if(dragHeld){sendBtn(0,false);dragHeld=false}
+  else if(ids.length===2){
+    var allTap=ids.every(function(k){var s=touches[k];return s&&!s.moved&&now-s.st<TAP_MS});
+    if(allTap){sendClickB(1);buzz("right");ripple(pad.clientWidth/2,pad.clientHeight/2)}
+  }else if(ids.length===1){
+    var s=touches[ids[0]];
+    if(s&&!s.moved&&!longPressFired&&now-s.st<TAP_MS){
+      sendClickB(0);buzz("left");
+      var rect=pad.getBoundingClientRect();ripple(s.sx-rect.left,s.sy-rect.top);
+    }
+  }
+  for(var i=0;i<e.changedTouches.length;i++) delete touches[e.changedTouches[i].identifier];
+  if(Object.keys(touches).length===0){padLast=null;scrollRef=null;hintBack()}
+},{passive:false});
+pad.addEventListener("touchcancel",function(e){
+  if(dragHeld){sendBtn(0,false);dragHeld=false}
+  for(var i=0;i<e.changedTouches.length;i++) delete touches[e.changedTouches[i].identifier];
+  if(Object.keys(touches).length===0){padLast=null;scrollRef=null;hintBack()}
+});
+$("qLeft").addEventListener("click",function(){sendClickB(0);buzz("left")});
+$("qMiddle").addEventListener("click",function(){sendClickB(2);buzz("middle")});
+$("qRight").addEventListener("click",function(){sendClickB(1);buzz("right")});
+
+/* ========= 键盘：蓝牙键盘语义 =========
+   每个键按下/抬起各发一条 VK 事件，拼音组字交给电脑自己的输入法。
+   修饰键：按住生效；快速点按粘滞，直到下一个普通键抬起。
+   连发键：按住 400ms 后开始 35ms 连发（服务端不会自动重复）。 */
+/* 键定义：[label, vk, weight?, kind?, shiftLabel?]  kind: 0普通 1修饰 2锁定 3连发 */
+var ROWS=[
+  [["esc",27,1.3],["F1",112,1,0,"fn"],["F2",113,1,0,"fn"],["F3",114,1,0,"fn"],["F4",115,1,0,"fn"],
+   ["F5",116,1,0,"fn"],["F6",117,1,0,"fn"],["F7",118,1,0,"fn"],["F8",119,1,0,"fn"],
+   ["F9",120,1,0,"fn"],["F10",121,1,0,"fn"],["F11",122,1,0,"fn"],["F12",123,1,0,"fn"],["del",46,1.3,3]],
+  [["`",192,1,0,"~"],["1",49,1,0,"!"],["2",50,1,0,"@"],["3",51,1,0,"#"],["4",52,1,0,"$"],
+   ["5",53,1,0,"%"],["6",54,1,0,"^"],["7",55,1,0,"&"],["8",56,1,0,"*"],["9",57,1,0,"("],
+   ["0",48,1,0,")"],["-",189,1,0,"_"],["=",187,1,0,"+"],["⌫",8,1.9,3]],
+  [["tab",9,1.5],["q",81],["w",87],["e",69],["r",82],["t",84],["y",89],["u",85],["i",73],
+   ["o",79],["p",80],["[",219,1,0,"{"],["]",221,1,0,"}"],["\\",220,1,0,"|"]],
+  [["caps",20,1.8,2],["a",65],["s",83],["d",68],["f",70],["g",71],["h",72],["j",74],["k",75],
+   ["l",76],[";",186,1,0,":"],["'",222,1,0,"\""],["⏎",13,1.8,3]],
+  [["⇧",160,1.9,1],["z",90],["x",88],["c",67],["v",86],["b",66],["n",78],["m",77],
+   [",",188,1,0,"<"],[".",190,1,0,">"],["/",191,1,0,"?"],["⇧",160,1.9,1]],
+  [["ctrl",162,1.4,1],["win",91,1.2,1],["alt",164,1.2,1],["",32,4.6,3],
+   ["←",37,.8,3],["↑",38,.8,3],["↓",40,.8,3],["→",39,.8,3]]
+];
+var SHIFT_VK=160;
+var pressedKeys={},latchedMods={},modDownAt={},modTouched={},wrapShift={},wasLatchedTap={};
+var capsAssumed=false,repeatVk=0,repeatTimer=null;
+function shiftActive(){return (SHIFT_VK in pressedKeys)||(SHIFT_VK in latchedMods)}
+function startRepeat(vk){
+  stopRepeat();repeatVk=vk;
+  repeatTimer=setTimeout(function(){
+    if(repeatVk){sendKeyVk(repeatVk,true,true);
+      repeatTimer=setInterval(function(){if(repeatVk)sendKeyVk(repeatVk,true,true)},35)}
+  },400);
+}
+function stopRepeat(){clearTimeout(repeatTimer);clearInterval(repeatTimer);repeatTimer=null;repeatVk=0}
+function releaseLatched(){for(var vk in latchedMods){sendKeyVk(+vk,false);delete latchedMods[vk]}}
+function releaseKeyboard(){
+  stopRepeat();
+  var had=false,vk;
+  for(vk in pressedKeys){had=true;break}
+  for(vk in latchedMods){had=true;break}
+  if(had){sendReleaseAll();pressedKeys={};latchedMods={};modDownAt={};modTouched={};kbSync()}
+}
+function kbPress(k,btn){
+  var vk=k[1],kind=k[3]||0;
+  buzz("tap");btn.classList.add("hold");
+  if(kind===1){ // 修饰键
+    if(vk in latchedMods){wasLatchedTap[k]=true;return} // 已粘滞：等抬起释放
+    pressedKeys[vk]=1;modDownAt[vk]=Date.now();delete modTouched[vk];
+    sendKeyVk(vk,true);kbSync();return;
+  }
+  if(kind===2){ // CapsLock
+    sendKeyVk(vk,true);sendKeyVk(vk,false);capsAssumed=!capsAssumed;kbSync();return;
+  }
+  if(k[4]&&!shiftActive()){wrapShift[k]=1;sendKeyVk(SHIFT_VK,true)} // 符号包一层 Shift
+  pressedKeys[vk]=(pressedKeys[vk]||0)+1;
+  sendKeyVk(vk,true);
+  if(kind===3) startRepeat(vk);
+  for(var m in pressedKeys){ if(+m!==vk) modTouched[m]=1 } // 按住的修饰键标记「被使用」
+  kbSync();
+}
+function kbRelease(k,btn){
+  var vk=k[1],kind=k[3]||0;
+  btn.classList.remove("hold");
+  if(kind===1){
+    delete pressedKeys[vk];
+    if(wasLatchedTap[k]){delete wasLatchedTap[k];delete latchedMods[vk];sendKeyVk(vk,false)}
+    else if(Date.now()-(modDownAt[vk]||0)<220 && !modTouched[vk]){latchedMods[vk]=1} // 粘滞
+    else sendKeyVk(vk,false);
+    delete modDownAt[vk];kbSync();return;
+  }
+  stopRepeat();
+  if(--pressedKeys[vk]<=0) delete pressedKeys[vk];
+  sendKeyVk(vk,false);
+  if(wrapShift[k]){delete wrapShift[k];if(!shiftActive())sendKeyVk(SHIFT_VK,false)}
+  releaseLatched();kbSync();
+}
+(function buildKbd(){
+  var grid=$("kbGrid");
+  ROWS.forEach(function(row){
+    var div=document.createElement("div");div.className="krow";
+    row.forEach(function(k){
+      var b=document.createElement("button");
+      var w=k[2]||1,kind=k[3]||0;
+      var cls="key";
+      if(w===1.5)cls+=" w15";else if(w===2)cls+=" w2";else if(w===2.4)cls+=" w25";
+      else if(w===5.5)cls+=" w55";else if(w<1)cls+=" ico";
+      if(k[4]==="fn"||(k[0].length>1&&kind!==1))cls+=" fn";
+      if(kind===1)cls+=" alt";
+      b.className=cls;
+      b.textContent=k[0];
+      b._k=k;
+      b.addEventListener("pointerdown",function(e){e.preventDefault();kbPress(k,b)});
+      b.addEventListener("pointerup",function(){kbRelease(k,b)});
+      b.addEventListener("pointercancel",function(){kbRelease(k,b)});
+      b.addEventListener("pointerleave",function(){if(b.classList.contains("hold"))kbRelease(k,b)});
+      b.addEventListener("contextmenu",function(e){e.preventDefault()});
+      div.appendChild(b);
+    });
+    grid.appendChild(div);
+  });
+  kbSync();
+})();
+function kbSync(){
+  var shift=shiftActive();
+  document.querySelectorAll("#kbGrid .key").forEach(function(b){
+    var k=b._k;if(!k) return;
+    var vk=k[1],kind=k[3]||0;
+    var on=(vk in latchedMods)||(kind===2&&capsAssumed);
+    b.classList.toggle("on",on);
+    // 标签跟随 Shift / Caps
+    var t=k[0];
+    if(k[4]&&shift&&k[4]!=="fn") t=k[4];
+    else if(vk>=65&&vk<=90&&(shift!==capsAssumed)) t=String.fromCharCode(vk);
+    if(b.textContent!==t) b.textContent=t;
+  });
+}
+/* ========= 媒体/音量 ========= */
+document.querySelectorAll("[data-key]").forEach(function(b){
+  b.addEventListener("click",function(){send({t:"key",value:b.dataset.key});buzz("left")});
+});
+var volSlider=$("volSlider");
+volSlider.addEventListener("input",function(){
+  volume=parseInt(this.value,10);
+  $("volNum").textContent=volume+"%";
+  send({t:"set_volume",level:volume});
+  buzz("wheel");
+});
+volSlider.addEventListener("change",function(){ send({t:"set_volume",level:parseInt(this.value,10)}) });
+$("muteBtn").addEventListener("click",function(){send({t:"toggle_mute"});buzz("middle")});
+
+/* ========= 应用/窗口 ========= */
+function loadWindows(){if(connected)send({t:"list_windows"})}
+function loadApps(){if(connected)send({t:"list_apps"})}
+$("winRefresh").addEventListener("click",function(){loadWindows();loadApps();buzz("tap")});
+
+function renderWindows(list){
+  var el=$("winList");el.innerHTML="";
+  if(!list.length){el.innerHTML='<div class="winRow"><div class="t" style="color:var(--text3)">没有打开的窗口</div></div>';return}
+  list.forEach(function(w){
+    var row=document.createElement("div");row.className="winRow";
+    var img=document.createElement("img");
+    img.src="/icon?pid="+w.pid;
+    img.onerror=function(){var ph=document.createElement("div");ph.className="ph";
+      ph.innerHTML='<i data-lucide="app-window"></i>';img.replaceWith(ph);icons()};
+    var t=document.createElement("div");t.className="t";t.textContent=w.title;
+    row.appendChild(img);row.appendChild(t);
+    if(w.foreground){
+      var bd=document.createElement("div");bd.className="badge";bd.textContent="当前";row.appendChild(bd);
+    }else{
+      var f=document.createElement("button");f.className="ic";f.title="切换";
+      f.innerHTML='<i data-lucide="corner-up-right"></i>';
+      f.addEventListener("click",function(){send({t:"focus_window",id:w.id});buzz("tap");setTimeout(loadWindows,600)});
+      row.appendChild(f);
+    }
+    if(w.minimized){
+      var r=document.createElement("button");r.className="ic";r.title="还原";
+      r.innerHTML='<i data-lucide="maximize-2"></i>';
+      r.addEventListener("click",function(){send({t:"focus_window",id:w.id});buzz("tap");setTimeout(loadWindows,700)});
+      row.appendChild(r);
+    }else{
+      var mn=document.createElement("button");mn.className="ic";mn.title="最小化";
+      mn.innerHTML='<i data-lucide="minus"></i>';
+      mn.addEventListener("click",function(){send({t:"min_window",id:w.id});buzz("tap");setTimeout(loadWindows,600)});
+      row.appendChild(mn);
+    }
+    var c=document.createElement("button");c.className="ic danger";c.title="关闭";
+    c.innerHTML='<i data-lucide="x"></i>';
+    c.addEventListener("click",function(){
+      send({t:"close_window",id:w.id});buzz("heavy");
+      row.style.opacity=".4";setTimeout(loadWindows,1100)});
+    row.appendChild(c);
+    el.appendChild(row);
+  });
+  icons();
+}
+var allApps=[];
+function renderApps(list){
+  allApps=list;
+  applyAppFilter($("appSearch").value);
+}
+function applyAppFilter(q){
+  q=(q||"").trim().toLowerCase();
+  var g=$("appGrid");g.innerHTML="";
+  var list=allApps.filter(function(a){return !q||a.name.toLowerCase().indexOf(q)>=0});
+  if(!list.length){
+    g.innerHTML='<div style="grid-column:1/-1;color:var(--text3);font-size:13px;padding:14px 2px">没有匹配的程序</div>';
+    return;
+  }
+  list.forEach(function(a){
+    var b=document.createElement("button");b.className="appTile";
+    var img=document.createElement("img");
+    img.src="/icon?app="+encodeURIComponent(a.name);
+    img.onerror=function(){var ph=document.createElement("div");ph.className="ph";
+      ph.innerHTML='<i data-lucide="box"></i>';img.replaceWith(ph);icons()};
+    var lab=document.createElement("span");lab.textContent=a.name;
+    b.appendChild(img);b.appendChild(lab);
+    b.addEventListener("click",function(){
+      send({t:"open_app",name:a.name});buzz("left");setTimeout(loadWindows,1500)});
+    g.appendChild(b);
+  });
+  icons();
+}
+$("appSearch").addEventListener("input",function(){applyAppFilter(this.value)});
+
+
+/* ========= 屏幕页（看屏幕 + 点按定位） ========= */
+var screenTimer=null, screenAuto=false;
+function loadScreen(){
+  var wrap=$("screenWrap"), img=$("screenImg");
+  var url="/screen?w=1280&q=70&t="+Date.now();
+  var pre=new Image();
+  pre.onload=function(){
+    img.src=url; wrap.classList.add("live");
+    $("screenInfo").textContent = pre.naturalWidth+"×"+pre.naturalHeight+" · 点按画面=点击";
+  };
+  pre.onerror=function(){ $("screenInfo").textContent="截屏失败"; };
+  pre.src=url;
+}
+$("screenRefresh").addEventListener("click",function(){ loadScreen(); buzz("tap") });
+$("screenAuto").addEventListener("click",function(){
+  screenAuto=!screenAuto;
+  this.classList.toggle("on",screenAuto);
+  this.style.color=screenAuto?"var(--accent)":"";
+  if(screenAuto){ loadScreen(); screenTimer=setInterval(loadScreen,1500) }
+  else { clearInterval(screenTimer); screenTimer=null }
+  buzz("page");
+});
+$("screenImg").addEventListener("click",function(e){
+  var r=this.getBoundingClientRect();
+  var nx=(e.clientX-r.left)/r.width, ny=(e.clientY-r.top)/r.height;
+  send({t:"screen_click",x:nx,y:ny,btn:"left"});
+  buzz("left");
+  var wr=$("screenWrap").getBoundingClientRect();
+  var rp=document.createElement("div"); rp.className="screenRipple";
+  rp.style.left=(e.clientX-wr.left)+"px";
+  rp.style.top=(e.clientY-wr.top)+"px";
+  $("screenWrap").appendChild(rp); setTimeout(function(){rp.remove()},520);
+});
+
+/* ========= 文件页 ========= */
+var fileCwd="", fileParent=null;
+function fmtSize(n){
+  if(!n) return "";
+  if(n<1024) return n+" B";
+  if(n<1048576) return (n/1024).toFixed(0)+" KB";
+  if(n<1073741824) return (n/1048576).toFixed(1)+" MB";
+  return (n/1073741824).toFixed(2)+" GB";
+}
+function fileIcon(entry){
+  if(entry.dir) return "folder";
+  var k=entry.ext;
+  if(["jpg","jpeg","png","gif","webp","bmp"].indexOf(k)>=0) return "image";
+  if(["mp4","webm","mkv","mov","avi"].indexOf(k)>=0) return "video";
+  if(["mp3","wav","flac","m4a","ogg"].indexOf(k)>=0) return "music";
+  if(["zip","rar","7z","tar","gz"].indexOf(k)>=0) return "archive";
+  if(["pdf"].indexOf(k)>=0) return "file-text";
+  return "file";
+}
+function loadFiles(path){
+  fetch("/files?path="+encodeURIComponent(path||""))
+    .then(function(r){return r.json()})
+    .then(function(d){
+      if(d.error){ toast(d.error); return }
+      fileCwd=d.path||""; fileParent=d.parent;
+      $("filePath").textContent=fileCwd||"选择位置";
+      var list=$("fileList"); list.innerHTML="";
+      if(d.roots && d.roots.length){
+        d.roots.forEach(function(root){
+          list.appendChild(fileRow({name:root.name,path:root.path,dir:true,size:0,ext:""}));
+        });
+        icons();
+        return;
+      }
+      var entries=d.entries||[];
+      entries.forEach(function(en){ list.appendChild(fileRow(en)) });
+      if(!entries.length) list.innerHTML='<div class="fItem"><div class="fn" style="color:var(--text3)">空目录</div></div>';
+      icons();
+    })
+    .catch(function(){ toast("读取目录失败") });
+}
+function fileRow(en){
+  var row=document.createElement("div"); row.className="fItem";
+  var ic=document.createElement("div"); ic.className="fi";
+  ic.innerHTML='<i data-lucide="'+fileIcon(en)+'"></i>';
+  var nm=document.createElement("div"); nm.className="fn";
+  nm.textContent = en.dir ? (en.name+"/") : en.name;
+  var sz=document.createElement("div"); sz.className="fs";
+  sz.textContent=en.dir?"":fmtSize(en.size);
+  row.appendChild(ic); row.appendChild(nm); row.appendChild(sz);
+  if(!en.dir){
+    var open=document.createElement("button"); open.className="fx"; open.title="用电脑打开";
+    open.innerHTML='<i data-lucide="external-link"></i>';
+    open.addEventListener("click",function(ev){
+      ev.stopPropagation(); send({t:"open_file",path:en.path}); buzz("tap");
+    });
+    row.appendChild(open);
+  }
+  row.addEventListener("click",function(){
+    buzz("tap");
+    if(en.dir) loadFiles(en.path); else previewFile(en);
+  });
+  return row;
+}
+var TEXT_EXT=["txt","md","log","json","xml","csv","js","ts","py","cs","java","c","cpp","h",
+              "html","css","sql","bat","ps1","ini","yml","yaml","cfg"];
+function previewFile(en){
+  var pv=$("filePreview"), body=$("pvBody"), name=$("pvName");
+  pv.style.display="flex"; name.textContent=en.name;
+  body.innerHTML='<span style="color:var(--text3)">加载中…</span>';
+  var k=fileIcon(en);
+  var url="/file?path="+encodeURIComponent(en.path);
+  if(k==="image"){
+    body.innerHTML='<img src="'+url+'" alt="">';
+  }else if(k==="video"){
+    body.innerHTML='<video src="'+url+'" controls playsinline></video>';
+  }else if(k==="music"){
+    body.innerHTML='<audio src="'+url+'" controls></audio>';
+  }else if(TEXT_EXT.indexOf(en.ext)>=0){
+    fetch(url).then(function(r){return r.json()}).then(function(d){
+      body.textContent=d.text||"";
+    }).catch(function(){ body.textContent="读取失败" });
+  }else{
+    body.innerHTML='<div style="color:var(--text2);font-size:13px">该类型不支持在线预览<br><br>'+
+      '<a href="'+url+'" download style="color:var(--accent)">下载到手机</a></div>';
+  }
+}
+$("pvClose").addEventListener("click",function(){ $("filePreview").style.display="none" });
+$("fileUp").addEventListener("click",function(){ loadFiles(fileParent||"") });
+$("fileUploadBtn").addEventListener("click",function(){ $("fileInput").click() });
+$("fileInput").addEventListener("change",function(){
+  var files=this.files; if(!files.length) return;
+  var dir=fileCwd||"";
+  if(!dir){ toast("请先进入一个目录再上传"); this.value=""; return }
+  var done=0, ok=0, total=files.length;
+  for(var i=0;i<total;i++){
+    (function(f){
+      var fd=new FormData(); fd.append("f",f,f.name);
+      fetch("/upload?dir="+encodeURIComponent(dir),{method:"POST",body:fd})
+        .then(function(r){return r.json()})
+        .then(function(d){ if(d.ok) ok++; })
+        .catch(function(){})
+        .then(function(){
+          done++;
+          if(done===total){ toast("上传完成 "+ok+"/"+total); loadFiles(dir); }
+        });
+    })(files[i]);
+  }
+  this.value="";
+});
+
+/* ========= 剪贴板 ========= */
+$("clipGet").addEventListener("click",function(){ send({t:"get_clipboard"}); buzz("tap") });
+$("clipSend").addEventListener("click",function(){
+  send({t:"set_clipboard",text:$("clipArea").value});
+  buzz("left"); toast("已发送到电脑剪贴板");
+});
+$("clipPaste").addEventListener("click",function(){ send({t:"key",value:"ctrl+v"}); buzz("tap") });
+
+/* ========= 电源 ========= */
+document.querySelectorAll("[data-power]").forEach(function(b){
+  b.addEventListener("click",function(){
+    var act=b.dataset.power;
+    var label={lock:"锁定",sleep:"睡眠",signout:"注销",restart:"重启",shutdown:"关机"}[act]||act;
+    if(act==="shutdown"||act==="restart"||act==="signout"){
+      if(!confirm("确定要"+label+"电脑吗？")) return;
+    }
+    send({t:"power",action:act});
+    buzz("heavy");
+    toast("已发送："+label);
+  });
+});
+
+/* ========= 主机状态 ========= */
+function renderSysInfo(info){
+  if(!info) return;
+  var box=$("sysInfo"); box.innerHTML="";
+  var items=[["CPU",info.cpu],["内存",info.ram],["运行",info.uptime],["主机",info.host]];
+  if(info.battery && info.battery!=="—") items.push(["电量",info.battery]);
+  items.forEach(function(kv){
+    var c=document.createElement("span");
+    c.className="chip"; c.style.pointerEvents="none";
+    c.textContent=kv[0]+" "+kv[1];
+    box.appendChild(c);
+  });
+}
+
+
+
+
+/* ========= 语音输入（Web Speech API） ========= */
+var recog = null, listening = false;
+$("voiceBtn").addEventListener("click", function () {
+  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { toast("此浏览器不支持语音识别（建议 Chrome）"); return; }
+  if (listening) {
+    listening = false;
+    try { recog.stop(); } catch (e) {}
+    this.style.color = ""; this.style.borderColor = "";
+    this.classList.remove("listening");
+    buzz("tap");
+    return;
+  }
+  recog = new SR();
+  recog.lang = "zh-CN";
+  recog.continuous = true;
+  recog.interimResults = false;
+  recog.onresult = function (ev) {
+    var txt = "";
+    for (var i = ev.resultIndex; i < ev.results.length; i++) {
+      if (ev.results[i].isFinal) txt += ev.results[i][0].transcript;
+    }
+    if (txt) {
+      // 语音结果直接发给电脑（中文不经手机输入法）
+      send({ t: "text", value: txt });
+      buzz("left");
+      toast("已输入：" + txt);
+    }
+  };
+  recog.onerror = function (e) { toast("语音识别错误：" + e.error); };
+  recog.onend = function () {
+    if (listening) { try { recog.start(); } catch (e) {} }
+  };
+  try {
+    recog.start();
+    listening = true;
+    this.style.color = "var(--accent)";
+    this.style.borderColor = "var(--accent)";
+    this.classList.add("listening");
+    buzz("page");
+    toast("正在听…再次点击停止");
+  } catch (e) { toast("启动失败：" + e.message); }
+});
+
+/* ========= 设置 ========= */
+function bindSlider(id,valId,get,set,fmt){
+  var s=$(id),v=$(valId);s.value=get();v.textContent=fmt(get());
+  s.addEventListener("input",function(){var n=parseFloat(this.value);set(n);v.textContent=fmt(n)});
+}
+bindSlider("sensSlider","sensVal",function(){return sens},function(n){sens=n;LS.set("sens",n)},function(n){return n.toFixed(1)});
+bindSlider("scrollSlider","scrollVal",function(){return scrollSpd},function(n){scrollSpd=n;LS.set("scroll",n)},function(n){return n.toFixed(1)});
+function bindSwitch(id,get,set){
+  var b=$(id);
+  function render(){b.classList.toggle("on",!!get())}
+  render();
+  b.addEventListener("click",function(){var v=!get();set(v);render();buzz("tap")});
+}
+bindSwitch("vibSwitch",function(){return vibOn},function(v){vibOn=v;LS.set("vib",v?"on":"off");if(v)buzz("left")});
+bindSwitch("wmSwitch",function(){return hintOn},function(v){
+  hintOn=v;LS.set("hint",v?"on":"off");$("padHint").style.display=v?"flex":"none"});
+document.querySelectorAll("#vibSeg button").forEach(function(b){
+  b.classList.toggle("on",b.dataset.vib===vibStrength);
+  b.addEventListener("click",function(){
+    vibStrength=this.dataset.vib;LS.set("vibStrength",vibStrength);
+    document.querySelectorAll("#vibSeg button").forEach(function(x){x.classList.toggle("on",x===b)});
+    buzz("middle");
+  });
+});
+$("themeSeg").addEventListener("click",function(e){
+  var b=e.target.closest("button");if(!b) return;
+  themeMode=b.dataset.theme;LS.set("theme",themeMode);applyTheme();buzz("tap");
+});
+$("disconnectBtn").addEventListener("click",function(){
+  buzz("heavy");try{ws&&ws.close()}catch(e){}
+  connected=false;host="";latency=null;
+  clearInterval(pingTimer);clearTimeout(reconnectTimer);
+  $("app").style.display="none";$("connect").style.display="flex";
+  renderRecent();setStatus();
+});
+
+/* ========= 启动 ========= */
+$("connectBtn").addEventListener("click",function(){goFullscreen();connect($("ipin").value)});
+$("ipin").addEventListener("keydown",function(e){if(e.key==="Enter"){goFullscreen();connect($("ipin").value)}});
+applyTheme();icons();
+$("ipin").value=host;renderRecent();
+if($("padHint").style.display==="none") $("padHint").style.display="flex";
+if(!hintOn) $("padHint").style.display="none";
+if(host) connect(host);
+var lastEnd=0;
+document.addEventListener("touchend",function(e){
+  var now=Date.now();if(now-lastEnd<300) e.preventDefault();lastEnd=now},{passive:false});
+})();
+</script>
+</body>
+</html>
