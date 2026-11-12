@@ -1,5 +1,6 @@
 using PadLink.Core;
 using System.Buffers.Binary;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -111,6 +112,28 @@ public static class WebSocketHandler
                     {
                         var (nx, ny) = ScreenService.CursorNormalized();
                         await Reply(ws, new { t = "cursor", x = nx, y = ny });
+                        continue;
+                    }
+                    if (type == "pump_stats")
+                    {
+                        await Reply(ws, new
+                        {
+                            t = "pump_stats",
+                            freq = Stopwatch.Frequency,
+                            stamps = InputService.InjectStamps.ToArray(),
+                            arrivals = InputService.ArriveStamps.ToArray(),
+                            mags = InputService.InjectMag.ToArray(),
+                            heartbeat = InputService.PumpHeartbeat,
+                            arrivedPx = InputService.AuditArrivedPx,
+                            injectedPx = InputService.AuditInjectedPx,
+                            arrivedN = InputService.AuditArrivedCount,
+                            injectedN = InputService.AuditInjectedCount,
+                            dbgPend = InputService.DbgPendX,
+                            dbgRem = InputService.DbgRemX,
+                            dbgInRate = InputService.DbgInRate,
+                            dbgBudget = InputService.DbgBudget,
+                            dbgTickMs = InputService.DbgLastTickMs,
+                        });
                         continue;
                     }
                     if (type == "search_programs")
